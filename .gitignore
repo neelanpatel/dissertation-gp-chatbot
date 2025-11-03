@@ -1,0 +1,15 @@
+# Python / Backend
+venv/
+__pycache__/
+*.pyc
+gp_database.db
+.env
+
+# Node / Frontend
+frontend/gp-chatbot-ui/node_modules/
+frontend/gp-chatbot-ui/build/
+frontend/gp-chatbot-ui/.env
+frontend/gp-chatbot-ui/.env.local
+
+# macOS
+.DS_Store
