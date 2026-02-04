@@ -1,0 +1,82 @@
+[
+  {
+    "condition_name": "Common Cold",
+    "search_chunk": "Condition: Common Cold. Overview: The common cold is a viral infection of your nose and throat. Symptoms: Blocked or runny nose, sore throat, headaches, muscle aches, cough, sneezing, raised temperature, pressure in ears and face, loss of taste and smell.",
+    "symptoms": "Blocked or runny nose, sore throat, headaches, muscle aches, cough, sneezing, raised temperature, pressure in ears and face, loss of taste and smell",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with cold medicines. You can buy cough and cold medicines from pharmacies or supermarkets. A pharmacist can advise you on the best medicine.",
+    "source_url": "https://www.nhs.uk/conditions/common-cold/"
+  },
+  {
+    "condition_name": "Flu",
+    "search_chunk": "Condition: Flu. Overview: Flu is a common infectious viral illness spread by coughs and sneezes. Symptoms: Sudden fever, body aches, feeling tired or exhausted, dry cough, sore throat, headache, difficulty sleeping, loss of appetite, stomach ache, feeling sick or being sick.",
+    "symptoms": "Sudden fever, body aches, feeling tired or exhausted, dry cough, sore throat, headache, difficulty sleeping, loss of appetite, stomach ache, feeling sick or being sick",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can give treatment advice and recommend flu remedies. Do not use flu remedies if you're taking paracetamol and ibuprofen tablets as these already contain these ingredients.",
+    "source_url": "https://www.nhs.uk/conditions/flu/"
+  },
+  {
+    "condition_name": "Chest Infection",
+    "search_chunk": "Condition: Chest Infection. Overview: Chest infections affect your lungs or airways. Symptoms: Persistent chesty cough with yellow or green phlegm, wheezing and shortness of breath, chest pain or discomfort, high temperature, headache, aching muscles, tiredness.",
+    "symptoms": "Persistent chesty cough with yellow or green phlegm, wheezing and shortness of breath, chest pain or discomfort, high temperature, headache, aching muscles, tiredness",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if you have a chest infection and: you feel very unwell or your symptoms get worse, you cough up blood or blood-stained phlegm, you've had a cough for more than 3 weeks.",
+    "source_url": "https://www.nhs.uk/conditions/chest-infection/"
+  },
+  {
+    "condition_name": "Hay Fever",
+    "search_chunk": "Condition: Hay Fever. Overview: Hay fever is an allergic reaction to pollen, typically when it comes into contact with your mouth, nose, eyes and throat. Symptoms: Sneezing and coughing, runny or blocked nose, itchy red or watery eyes, itchy throat mouth nose and ears, loss of smell, pain around temples and forehead, headache, earache, feeling tired.",
+    "symptoms": "Sneezing and coughing, runny or blocked nose, itchy red or watery eyes, itchy throat mouth nose and ears, loss of smell, pain around temples and forehead, headache, earache, feeling tired",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with hay fever. Speak to your pharmacist if you have hay fever. They can give advice and suggest the best treatments, like antihistamine drops, tablets or nasal sprays.",
+    "source_url": "https://www.nhs.uk/conditions/hay-fever/"
+  },
+  {
+    "condition_name": "Asthma Attack",
+    "search_chunk": "Condition: Asthma Attack. Overview: An asthma attack is when symptoms get much worse suddenly. Symptoms: Severe wheezing when breathing, chest feels tight, cannot complete sentences, pulse racing, feeling agitated or panicked, blue lips or fingers, fainting or collapse.",
+    "symptoms": "Severe wheezing when breathing, chest feels tight, cannot complete sentences, pulse racing, feeling agitated or panicked, blue lips or fingers, fainting or collapse",
+    "triage_advice": "Emergency",
+    "source_explanation": "Call 999 immediately if: you're having an asthma attack and your inhaler isn't helping, you're too breathless to speak, your lips or fingers are blue, you faint or collapse.",
+    "source_url": "https://www.nhs.uk/conditions/asthma-attack/"
+  },
+  {
+    "condition_name": "Urinary Tract Infection (UTI)",
+    "search_chunk": "Condition: Urinary Tract Infection. Overview: UTIs are common infections that affect the bladder, kidneys and connected tubes. Symptoms: Pain or burning when urinating, needing to urinate more often especially at night, cloudy or smelly urine, blood in urine, lower abdomen pain, feeling generally unwell.",
+    "symptoms": "Pain or burning when urinating, needing to urinate more often especially at night, cloudy or smelly urine, blood in urine, lower abdomen pain, feeling generally unwell",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with UTIs. You can ask a pharmacist about treatments for UTIs. They can suggest the best painkiller to take and may offer antibiotics if appropriate.",
+    "source_url": "https://www.nhs.uk/conditions/urinary-tract-infections-utis/"
+  },
+  {
+    "condition_name": "Sore Throat",
+    "search_chunk": "Condition: Sore Throat. Overview: Sore throats are very common and usually get better by themselves within 3 to 7 days. Symptoms: Pain when swallowing, dry scratchy throat, redness in back of mouth, bad breath, mild cough, swollen neck glands.",
+    "symptoms": "Pain when swallowing, dry scratchy throat, redness in back of mouth, bad breath, mild cough, swollen neck glands",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with sore throats. You can ask a pharmacist about ways of relieving the pain and discomfort of a sore throat, such as paracetamol or ibuprofen.",
+    "source_url": "https://www.nhs.uk/conditions/sore-throat/"
+  },
+  {
+    "condition_name": "Heart Attack",
+    "search_chunk": "Condition: Heart Attack. Overview: A heart attack is a medical emergency where blood supply to the heart is suddenly blocked. Symptoms: Chest pain like pressure squeezing or heaviness, pain spreading to arms back neck jaw stomach, shortness of breath, feeling weak or lightheaded, overwhelming anxiety, coughing or wheezing.",
+    "symptoms": "Chest pain like pressure squeezing or heaviness, pain spreading to arms back neck jaw stomach, shortness of breath, feeling weak or lightheaded, overwhelming anxiety, coughing or wheezing",
+    "triage_advice": "Emergency",
+    "source_explanation": "Call 999 immediately if you think someone is having a heart attack. The faster you act, the better their chances. Do not delay - every minute matters.",
+    "source_url": "https://www.nhs.uk/conditions/heart-attack/"
+  },
+  {
+    "condition_name": "Sprain",
+    "search_chunk": "Condition: Sprain. Overview: A sprain happens when ligaments are stretched or torn. Symptoms: Pain tenderness or weakness, swelling or bruising, unable to put weight on injury, muscle spasms or cramping, limited flexibility.",
+    "symptoms": "Pain tenderness or weakness, swelling or bruising, unable to put weight on injury, muscle spasms or cramping, limited flexibility",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with sprains. They can offer advice about the best painkiller to use and provide supports like bandages and elastic wraps.",
+    "source_url": "https://www.nhs.uk/conditions/sprains/"
+  },
+  {
+    "condition_name": "Diabetes",
+    "search_chunk": "Condition: Diabetes. Overview: Diabetes is a condition that causes blood sugar levels to become too high. Symptoms: Feeling very thirsty, urinating more frequently especially at night, feeling very tired, weight loss and muscle wasting, itchy genitals or thrush, cuts that heal slowly, blurred vision.",
+    "symptoms": "Feeling very thirsty, urinating more frequently especially at night, feeling very tired, weight loss and muscle wasting, itchy genitals or thrush, cuts that heal slowly, blurred vision",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if you have symptoms of diabetes or you're worried you may have a higher risk of getting diabetes. Early diagnosis and treatment is very important.",
+    "source_url": "https://www.nhs.uk/conditions/diabetes/"
+  }
+]
