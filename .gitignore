@@ -1,9 +1,13 @@
 # Python / Backend
-venv/
+.env
 __pycache__/
 *.pyc
+*.db
 gp_database.db
-.env
+venv/
+.DS_Store
+nhs_index.faiss
+
 
 # Node / Frontend
 frontend/gp-chatbot-ui/node_modules/
