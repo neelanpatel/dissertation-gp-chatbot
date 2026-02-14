@@ -96,6 +96,19 @@ def initialise_database():
         FOREIGN KEY (appointment_id) REFERENCES appointments (id)
     )
     ''')
+
+    # Messages table: Stores chat history to prevent context loss.
+    # Indexed by user_id implicitly via the foreign key to speed up retrieval.
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    ''')
     
     conn.commit()
     conn.close()
@@ -449,6 +462,25 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
         "dob": current_user['dob']
     }
 
+@app.get("/chat/history")
+async def fetch_history(current_user: dict = Depends(get_current_user)):
+    """Retrieves the last 50 messages for the authenticated user to restore chat context."""
+    conn = get_db_connection()
+    
+    # We fetch the last 50 messages, ordered chronologically
+    messages = conn.execute("""
+        SELECT role, content, timestamp 
+        FROM messages 
+        WHERE user_id = ? 
+        ORDER BY timestamp ASC 
+        LIMIT 50
+    """, (current_user['id'],)).fetchall()
+    
+    conn.close()
+    
+    # Convert the SQLite rows into standard dictionaries for JSON response
+    return [dict(msg) for msg in messages]
+
 @app.get("/appointments")
 async def list_appointments(current_user: dict = Depends(get_current_user)):
     """Endpoint for the user dashboard. Returns ONLY the logged-in user's appointments."""
@@ -475,6 +507,15 @@ async def refresh_appointments():
 async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_message = request.message
     history = request.history
+
+    # save the user's incoming message
+    conn = get_db_connection()
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn.execute(
+        "INSERT INTO messages (user_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+        (current_user['id'], 'user', user_message, current_time)
+    )
+    conn.commit()
     
     # System prompt defines the persona, STRICT safety guardrails, and injects authenticated user context.
     # Note: Moving this to a config file would be a future improvement.
@@ -627,6 +668,15 @@ Be warm, professional, and concise."""
     except Exception as e:
         print(f"Chat Error: {e}")
         agent_response = "I encountered an error. Please try again."
+
+    # Save the AI's final response
+    response_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn.execute(
+        "INSERT INTO messages (user_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+        (current_user['id'], 'assistant', agent_response, response_time)
+    )
+    conn.commit()
+    conn.close()
 
     return {"response": agent_response}
 
