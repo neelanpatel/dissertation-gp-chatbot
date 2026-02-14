@@ -516,6 +516,7 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
         (current_user['id'], 'user', user_message, current_time)
     )
     conn.commit()
+
     
     # System prompt defines the persona, STRICT safety guardrails, and injects authenticated user context.
     # Note: Moving this to a config file would be a future improvement.
@@ -524,9 +525,14 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
         "content": f"""You are a helpful GP surgery assistant.
 You are speaking with {current_user['full_name']} (DOB: {current_user['dob']}).
 
-CRITICAL SAFETY RULES:
-1. ALWAYS check for "red flag" emergency symptoms first: chest pain, difficulty breathing, stroke symptoms, severe bleeding.
-2. If ANY red flag is detected, IMMEDIATELY respond: "🚨 Based on your symptoms, you need urgent medical attention. Please call 999 immediately. This is a medical emergency."
+CRITICAL SAFETY RULES & RED FLAG CONFIRMATION (HIGHEST PRIORITY):
+1. Monitor for potential "red flag" symptoms: chest pain, difficulty breathing, stroke symptoms (FAST), severe bleeding, loss of consciousness.
+2. CONFIRMATION STEP (Reducing False Positives): 
+   - If the user mentions a red flag symptom but the context is ambiguous, historical, or mild (e.g., "I had chest pain yesterday", "my chest hurts when I cough with this cold"), DO NOT immediately trigger an emergency.
+   - Instead, ask ONE direct clarifying question to determine if it is an acute, severe medical emergency right now (e.g., "Just to be safe, are you experiencing severe, crushing chest pain right now?").
+3. TRIGGERING THE ALARM: 
+   - ONLY if the user CONFIRMS the symptom is currently severe/life-threatening, OR if their initial message is unambiguously an active emergency (e.g., "I think I'm having a heart attack"), you MUST respond ONLY with the exact phrase: "EMERGENCY_DETECTED". 
+   - Do not provide any other text when triggering the alarm.
 
 TRIAGE WORKFLOW:
 1. Ask for symptoms.
@@ -678,7 +684,18 @@ Be warm, professional, and concise."""
     conn.commit()
     conn.close()
 
-    return {"response": agent_response}
+    # emergency intercept 
+
+    if "EMERGENCY_DETECTED" in agent_response:
+        return {
+            "response": "⚠️ URGENT: Your symptoms require immediate medical assessment.",
+            "status": "emergency"
+        }
+
+    return {
+        "response": agent_response,
+        "status": "normal"
+    }
 
 if __name__ == "__main__":
     import uvicorn

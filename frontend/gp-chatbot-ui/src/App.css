@@ -370,3 +370,91 @@ body {
   transform: none;
   cursor: not-allowed;
 }
+
+/* Emergency Hard Lock UI */
+.emergency-alert {
+  background-color: #FFF5F5;
+  border: 2px solid #E53E3E;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.emergency-alert h3 {
+  color: #E53E3E;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+}
+
+.emergency-alert h3 span {
+  font-size: 1.5rem;
+  margin-right: 10px;
+}
+
+.emergency-description {
+  color: #2D3748;
+  font-weight: 500;
+}
+
+.emergency-options-grid {
+  display: grid;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.emergency-option-card {
+  background-color: white;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.emergency-option-card.nhs-111 {
+  border-left: 4px solid #3182CE;
+}
+
+.emergency-option-card.nhs-111 h4 {
+  margin: 0 0 5px 0;
+  color: #2B6CB0;
+}
+
+.emergency-option-card.gp-contact {
+  border-left: 4px solid #38A169;
+}
+
+.emergency-option-card.gp-contact h4 {
+  margin: 0 0 5px 0;
+  color: #2F855A;
+}
+
+.emergency-option-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4A5568;
+}
+
+.emergency-warning-text {
+  font-size: 0.85rem;
+  color: #718096;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.emergency-reset-btn {
+  width: 100%;
+  margin-top: 15px;
+  background-color: #CBD5E0;
+  color: #4A5568;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.emergency-reset-btn:hover {
+  background-color: #A0AEC0;
+}

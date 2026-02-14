@@ -111,6 +111,8 @@ function App() {
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  // track the emergency lockout state 
+  const [isEmergencyLock, setIsEmergencyLock] = useState(false);
   const chatWindowRef = useRef(null);
 
   // Pre-populate with standard welcome message
@@ -215,6 +217,9 @@ function App() {
   };
 
   const handleSendMessage = async () => {
+    // Prevent API calls if locked 
+    if (isEmergencyLock) return;
+
     const messageToSend = inputValue.trim();
     if (!messageToSend) return;
 
@@ -248,6 +253,11 @@ function App() {
       if (!response.ok) throw new Error('Network response was not ok');
       
       const data = await response.json();
+
+      // Check for the emergency status trigger
+      if (data.status === 'emergency') {
+        setIsEmergencyLock(true);
+      }
       
       // Check if this is a booking confirmation
       const bookingInfo = parseBookingConfirmation(data.response);
@@ -350,13 +360,58 @@ function App() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Type your message here..."
-            disabled={isLoading}
+            // Update placeholder to explain why it's locked
+            placeholder={isEmergencyLock ? "Chat disabled for your safety." : "Type your message here..."}
+            // Hard lock the input field
+            disabled={isLoading || isEmergencyLock} 
           />
-          <button onClick={handleSendMessage} disabled={isLoading}>
+          <button onClick={handleSendMessage} disabled={isLoading || isEmergencyLock}>
             Send
           </button>
         </div>
+
+
+        {/* Emergency Hard Lock Overlay */}
+        {isEmergencyLock && (
+          <div className="emergency-alert">
+            <h3>
+              <span>🛑</span> Medical Assessment Required
+            </h3>
+            <p className="emergency-description">
+              Based on the symptoms described, this automated assistant has been locked for your safety. Please seek human medical advice immediately.
+            </p>
+            
+            <div className="emergency-options-grid">
+              <div className="emergency-option-card nhs-111">
+                <h4>📞 NHS 111</h4>
+                <p>
+                  Call <strong>111</strong> for free, 24/7 urgent medical advice. They can direct you to the most appropriate local service.
+                </p>
+              </div>
+              
+              <div className="emergency-option-card gp-contact">
+                <h4>🏥 Contact Your GP</h4>
+                <p>
+                  Call our surgery directly at <strong>01234 567 890</strong> to speak with a receptionist.
+                </p>
+              </div>
+            </div>
+
+            <p className="emergency-warning-text">
+              If this is a life-threatening emergency, please call <strong>999</strong> immediately.
+            </p>
+            
+            <button
+              className="emergency-reset-btn"
+              onClick={() => {
+                setIsEmergencyLock(false);
+                setChatHistory([{ sender: 'agent', text: "Session reset. How can I help you today?", isWelcome: true }]);
+              }}
+            >
+              I understand, reset session
+            </button>
+          </div>
+        )}
       </div>
       
       {/* Booking confirmation popup toast */}
