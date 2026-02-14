@@ -128,6 +128,7 @@ function App() {
     setToken(accessToken);
     setView('dashboard');
     fetchAppointments(accessToken);
+    fetchChatHistory(accessToken);
   };
 
   // Clear auth token and reset state
@@ -140,6 +141,36 @@ function App() {
       text: "🏥 Welcome to GP Assistant.\n\nHow can I help you today?",
       isWelcome: true 
     }]);
+  };
+
+  // Fetch saved chat logs from the database
+  const fetchChatHistory = async (authToken = token) => {
+    if (!authToken) return;
+    try {
+      const response = await fetch('http://localhost:8000/chat/history', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.length > 0) {
+          const formattedHistory = data.map(msg => ({
+            sender: msg.role === 'user' ? 'user' : 'agent',
+            text: msg.content
+          }));
+          // Prepend the welcome message so it's always at the top
+          setChatHistory([
+            { 
+              sender: 'agent', 
+              text: "🏥 Welcome back to GP Assistant.",
+              isWelcome: true 
+            },
+            ...formattedHistory
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch chat history:", error);
+    }
   };
 
   // Fetch authenticated user's appointments
@@ -164,6 +195,7 @@ function App() {
     if (token) {
       fetchAppointments(token);
       // Poll for updates every 10 seconds
+      fetchChatHistory(token);
       const interval = setInterval(() => fetchAppointments(token), 10000);
       return () => clearInterval(interval);
     }
