@@ -50,8 +50,6 @@ def initialise_database():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("DROP TABLE IF EXISTS appointments")
-    cursor.execute("DROP TABLE IF EXISTS booking_history")
     
     # Users table: Stores registered patient credentials and personal information.
     # We use a unique constraint on username to prevent duplicate registrations.
@@ -109,9 +107,6 @@ def generate_appointment_slots():
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Resetting the schedule for the demo/dev environment
-    cursor.execute("DELETE FROM appointments")
     
     current_date = datetime.now() + timedelta(days=1)
     current_date = current_date.replace(hour=9, minute=0, second=0, microsecond=0)
