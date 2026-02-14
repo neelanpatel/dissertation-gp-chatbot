@@ -49,6 +49,9 @@ def initialise_database():
     """Sets up the SQLite schema if it doesn't exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    cursor.execute("DROP TABLE IF EXISTS appointments")
+    cursor.execute("DROP TABLE IF EXISTS booking_history")
     
     # Users table: Stores registered patient credentials and personal information.
     # We use a unique constraint on username to prevent duplicate registrations.
