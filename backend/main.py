@@ -320,27 +320,49 @@ def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day:
     except Exception as e:
         return json.dumps({"status": "error", "message": f"Booking error: {str(e)}"})
 
-def cancel_appointment(booking_reference: str = None, user_id: int = None):
+def cancel_appointment(user_id: int, requested_day: str, requested_time: str):
     """
-    Cancels an existing appointment.
+    Cancels an existing appointment using natural language date and time.
     Ensures that users can only cancel appointments tied to their specific user account.
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Only allow cancellation if the appointment belongs to the authenticated user
+        # Fetch user's currently booked appointments
         cursor.execute("""
             SELECT id, slot_time, patient_name, booking_reference 
             FROM appointments 
-            WHERE booking_reference = ? AND user_id = ? AND is_booked = 1
-        """, (booking_reference, user_id))
+            WHERE user_id = ? AND is_booked = 1
+        """, (user_id,))
         
-        appointment = cursor.fetchone()
+        user_appointments = cursor.fetchall()
         
-        if not appointment:
+        if not user_appointments:
             conn.close()
-            return json.dumps({"status": "error", "message": "No booking found with that reference for your account."})
+            return json.dumps({"status": "error", "message": "You currently have no booked appointments."})
+        
+        # Normalise input for comparison
+        requested_time_clean = requested_time.strip().upper()
+        appointment_to_cancel = None
+        
+        # Fuzzy match the requested date/time against their bookings
+        for appt in user_appointments:
+            slot_datetime = datetime.strptime(appt['slot_time'], '%Y-%m-%d %H:%M:%S')
+            slot_day = slot_datetime.strftime('%A')
+            slot_time_12hr = slot_datetime.strftime('%I:%M %p').lstrip('0').upper()
+            slot_date_full = slot_datetime.strftime('%A, %B %d, %Y')
+            
+            day_match = (requested_day.lower() in slot_day.lower() or requested_day.lower() in slot_date_full.lower())
+            time_match = requested_time_clean in slot_time_12hr
+            
+            if day_match and time_match:
+                appointment_to_cancel = appt
+                break
+                
+        if not appointment_to_cancel:
+            conn.close()
+            return json.dumps({"status": "error", "message": f"Could not find an appointment on {requested_day} at {requested_time} for your account."})
         
         # Reset the slot to available and remove user bindings
         cursor.execute("""
@@ -352,17 +374,17 @@ def cancel_appointment(booking_reference: str = None, user_id: int = None):
                 booked_at = NULL,
                 status = 'available'
             WHERE id = ?
-        """, (appointment['id'],))
+        """, (appointment_to_cancel['id'],))
         
         # Log the cancellation
         cursor.execute("""
             INSERT INTO booking_history (appointment_id, action, patient_name, booking_reference, timestamp)
             VALUES (?, 'cancelled', ?, ?, ?)
-        """, (appointment['id'], appointment['patient_name'], appointment['booking_reference'], datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        """, (appointment_to_cancel['id'], appointment_to_cancel['patient_name'], appointment_to_cancel['booking_reference'], datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         
         conn.commit()
         conn.close()
-        return json.dumps({"status": "success", "message": "Appointment cancelled successfully."})
+        return json.dumps({"status": "success", "message": f"Your appointment on {requested_day} at {requested_time} has been cancelled successfully."})
         
     except Exception as e:
         return json.dumps({"status": "error", "message": f"Cancellation error: {str(e)}"})
@@ -587,8 +609,13 @@ BOOKING WORKFLOW (STRICTLY AFTER TRIAGE):
    IMPORTANT: You already know their name is {current_user['full_name']}, so DO NOT ask for it.
 
 CANCELLATION:
-1. Ask for the booking reference.
-2. Call `cancel_appointment`.
+1. Ask the user for the day and time of the appointment they wish to cancel. Do NOT ask for a booking reference.
+2. Call `cancel_appointment` using the day and time they provide.
+
+RESCHEDULING:
+1. If a user asks to reschedule, treat it as a two-step process.
+2. Step 1: Ask for the day and time of their *current* appointment, then call `cancel_appointment`.
+3. Step 2: Once cancelled, immediately call `get_available_appointments`, present the slots to the user, and use `book_appointment_by_datetime` to secure the new slot.
 
 Be warm, professional, and concise."""
     }
@@ -599,8 +626,8 @@ Be warm, professional, and concise."""
     def book_appt_wrapper(requested_day, requested_time, patient_name=None):
         return book_appointment_by_datetime(current_user['id'], current_user['full_name'], requested_day, requested_time)
         
-    def cancel_appt_wrapper(booking_reference):
-        return cancel_appointment(booking_reference, current_user['id'])
+    def cancel_appt_wrapper(requested_day, requested_time):
+        return cancel_appointment(current_user['id'], requested_day, requested_time)
 
     # Define available tools (Functions) for the OpenAI model
     tools = [
@@ -644,13 +671,14 @@ Be warm, professional, and concise."""
             "type": "function",
             "function": {
                 "name": "cancel_appointment",
-                "description": "Cancels a booking.",
+                "description": "Cancels a booking based on the natural language day and time. Do NOT ask for a booking reference.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "booking_reference": {"type": "string", "description": "Booking reference code."}
+                        "requested_day": {"type": "string", "description": "Day of the appointment to cancel (e.g. Monday)."},
+                        "requested_time": {"type": "string", "description": "Time of the appointment to cancel (e.g. 9:00 AM)."}
                     },
-                    "required": ["booking_reference"],
+                    "required": ["requested_day", "requested_time"],
                 },
             },
         },
