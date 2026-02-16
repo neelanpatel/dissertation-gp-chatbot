@@ -372,7 +372,9 @@ def get_triage_recommendation_from_kb(symptom_description: str):
     RAG Implementation:
     1. Vectorises the symptom description.
     2. Searches the FAISS index for relevant NHS content chunks.
-    3. Returns the top 3 matches for the LLM to synthesise.
+    3. Evaluates the distance score of the best match.
+    4. If the distance is too high (weak match), it forces the LLM to trigger a human fallback.
+
     """
     if not faiss_index or not nhs_data:
         return json.dumps({"status": "error", "message": "Knowledge base not loaded."})
@@ -384,6 +386,25 @@ def get_triage_recommendation_from_kb(symptom_description: str):
         query_vector = np.array([query_embedding]).astype("float32")
 
         distances, indices = faiss_index.search(query_vector, 3)
+
+        # Extract the distance of the absolute best (closest) match.
+        best_match_distance = float(distances[0][0])
+
+        print(f"\n---> FAISS DISTANCE SCORE: {best_match_distance} <---", flush=True)
+
+        # Define the threshold
+        DISTANCE_THRESHOLD = 1.15
+
+        if best_match_distance > DISTANCE_THRESHOLD:
+            # The match is too weak. Intercept the data before the LLM can guess.
+            return json.dumps({
+                "status": "low_confidence", 
+                "message": "The system could not find a confident match for these symptoms. You MUST immediately trigger the HUMAN FALLBACK and ask the user to call the surgery on 01632 960000.",
+                "best_match_distance": best_match_distance
+            })
+
+
+
         relevant_chunks = [nhs_data[i] for i in indices[0]]
         return json.dumps({"status": "found", "context": relevant_chunks})
     except Exception as e:
@@ -467,13 +488,17 @@ async def fetch_history(current_user: dict = Depends(get_current_user)):
     """Retrieves the last 50 messages for the authenticated user to restore chat context."""
     conn = get_db_connection()
     
-    # We fetch the last 50 messages, ordered chronologically
+    # Use a subquery to grab the newest 50 (DESC), then re-sort them chronologically (ASC)
     messages = conn.execute("""
         SELECT role, content, timestamp 
-        FROM messages 
-        WHERE user_id = ? 
+        FROM (
+            SELECT id, role, content, timestamp 
+            FROM messages 
+            WHERE user_id = ? 
+            ORDER BY timestamp DESC 
+            LIMIT 50
+        )
         ORDER BY timestamp ASC 
-        LIMIT 50
     """, (current_user['id'],)).fetchall()
     
     conn.close()
@@ -502,6 +527,8 @@ async def refresh_appointments():
         return {"status": "success", "message": "Appointment slots have been refreshed for the next 5 business days."}
     except Exception as e:
         return {"status": "error", "message": f"Failed to refresh appointments: {str(e)}"}
+    
+
 
 @app.post("/chat")
 async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
@@ -539,10 +566,17 @@ OUT-OF-BOUNDS QUERIES (STRICT GUARDRAIL):
 2. If the user asks about ANYTHING unrelated to these topics (e.g., programming, general knowledge, politics, creative writing, or financial advice), you MUST politely refuse to answer.
 3. Example refusal: "I am a medical assistant, so I can only help you with health-related concerns and booking GP appointments. How can I help you with your health today?"
 
-TRIAGE WORKFLOW:
-1. Ask for symptoms.
-2. Call `get_triage_recommendation_from_kb` to get advice.
-3. If advice is 'GP', offer appointments.
+HUMAN FALLBACK & UNCERTAINTY :
+1. If the `get_triage_recommendation_from_kb` tool returns results that do not confidently match the user's symptoms, or if the symptoms are too complex and require multiple conflicting possibilities, DO NOT guess.
+2. You must immediately trigger a human fallback response to prioritize patient safety.
+3. Example fallback: "Based on what you've told me, my system isn't completely certain about the best advice for your specific symptoms. To ensure you get the safest care, please call the GP surgery directly on 01632 960000 to speak with our reception team or a clinician."
+
+TRIAGE WORKFLOW (STRICT TOOL USAGE):
+1. Ask the patient for their symptoms.
+2. You MUST ALWAYS call `get_triage_recommendation_from_kb` as soon as the user provides symptoms. 
+3. DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You must only provide advice based on the output of the tool.
+4. If the tool returns a `low_confidence` status, you must immediately trigger the human fallback and ask them to call 01632 960000. Do not attempt to guess anyway.
+5. If the tool returns a confident match (e.g., advice is 'GP' or 'Pharmacist'), present that advice and offer appointments if applicable.
 
 BOOKING WORKFLOW:
 1. Call `get_available_appointments`.
@@ -572,7 +606,7 @@ Be warm, professional, and concise."""
             "type": "function",
             "function": {
                 "name": "get_triage_recommendation_from_kb",
-                "description": "Searches NHS knowledge base for triage advice.",
+                "description": "CRITICAL: You MUST call this tool whenever the user mentions ANY physical symptoms, mental symptoms, or feeling unwell, no matter how vague or minor.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -662,6 +696,7 @@ Be warm, professional, and concise."""
                             function_response = function_to_call(**function_args)
                         else:
                             function_response = function_to_call()
+                        
                     except TypeError as e:
                          # Handle cases where LLM sends extra/wrong args
                          function_response = json.dumps({"status": "error", "message": f"Argument error: {str(e)}"})
