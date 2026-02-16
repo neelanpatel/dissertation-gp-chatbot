@@ -212,8 +212,9 @@ function App() {
 
   // Parse agent messages for booking confirmations
   const parseBookingConfirmation = (text) => {
-    const bookingRefMatch = text.match(/Ref: ([A-Z0-9]+)/) || text.match(/Reference: ([A-Z0-9]+)/);
-    return bookingRefMatch ? { reference: bookingRefMatch[1] } : null;
+    const lowerText = text.toLowerCase();
+    const isConfirmed = lowerText.includes('successfully booked') || lowerText.includes('appointment confirmed');
+    return isConfirmed ? true : false;
   };
 
   const handleSendMessage = async () => {
@@ -302,9 +303,9 @@ function App() {
         </div>
         
         <div className="appointment-list">
-          {appointments.filter(a => a.booking_reference).length > 0 ? (
+          {appointments.filter(a => a.id).length > 0 ? (
             appointments
-              .filter(a => a.booking_reference)
+              .filter(a => a.id)
               .map((appt) => (
                 <div key={appt.id} className="appointment-card">
                   <div className="appt-time">
@@ -312,10 +313,7 @@ function App() {
                     <br/>
                     @ {new Date(appt.slot_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  <div className="appt-ref">
-                    Ref: {appt.booking_reference}
-                  </div>
-                  <div className="appt-status">
+                  <div className="appt-status" style={{marginTop: '8px'}}>
                     Confirmed
                   </div>
                 </div>
@@ -415,14 +413,14 @@ function App() {
       </div>
       
       {/* Booking confirmation popup toast */}
-      {showBookingConfirmation && lastBooking && (
+      {showBookingConfirmation && (
         <div style={{
           position: 'absolute', top: '30px', right: '30px', 
           background: '#38B2AC', color: 'white', padding: '16px 24px', 
           borderRadius: '16px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)',
           fontWeight: '600', animation: 'slideUp 0.5s ease-out', zIndex: 100
         }}>
-          ✅ Booking Confirmed! ({lastBooking.reference})
+          ✅ Booking Confirmed!
         </div>
       )}
 
