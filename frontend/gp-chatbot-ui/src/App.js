@@ -103,7 +103,7 @@ function RegisterForm({ onLogin, onSwitchToLogin }) {
 }
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(sessionStorage.getItem('token'));
   const [view, setView] = useState('login');
   
   const [inputValue, setInputValue] = useState('');
@@ -126,23 +126,30 @@ function App() {
 
   // Handle successful login and token storage
   const handleLogin = (accessToken) => {
-    localStorage.setItem('token', accessToken);
+    sessionStorage.setItem('token', accessToken);
     setToken(accessToken);
     setView('dashboard');
     fetchAppointments(accessToken);
     fetchChatHistory(accessToken);
   };
 
-  // Clear auth token and reset state
+  // Clear auth token and deeply reset all frontend state
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setToken(null);
     setView('login');
+    
+    // Completely clear previous user's data
     setChatHistory([{ 
       sender: 'agent', 
       text: "🏥 Welcome to GP Assistant.\n\nHow can I help you today?",
       isWelcome: true 
     }]);
+    setAppointments([]);
+    setInputValue('');
+    setIsEmergencyLock(false);
+    setLastBooking(null);
+    setShowBookingConfirmation(false);
   };
 
   // Fetch saved chat logs from the database
