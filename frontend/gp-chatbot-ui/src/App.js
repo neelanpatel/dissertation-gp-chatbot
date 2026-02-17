@@ -310,23 +310,42 @@ function App() {
         </div>
         
         <div className="appointment-list">
-          {appointments.filter(a => a.id).length > 0 ? (
+          {appointments.filter(a => a.id && new Date(a.slot_time) >= new Date(Date.now() - 48 * 60 * 60 * 1000)).length > 0 ? (
             appointments
-              .filter(a => a.id)
-              .map((appt) => (
-                <div key={appt.id} className="appointment-card">
-                  <div className="appt-time">
-                    {new Date(appt.slot_time).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                    <br/>
-                    @ {new Date(appt.slot_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              .filter(a => a.id && new Date(a.slot_time) >= new Date(Date.now() - 48 * 60 * 60 * 1000))
+              .sort((a, b) => new Date(a.slot_time) - new Date(b.slot_time)) // Sort chronologically
+              .map((appt) => {
+                const apptDate = new Date(appt.slot_time);
+                const isPast = apptDate < new Date(); // Check if the appointment has already happened
+                
+                return (
+                  <div 
+                    key={appt.id} 
+                    className="appointment-card" 
+                    // Visually dim the card if it's in the past
+                    style={{ opacity: isPast ? 0.6 : 1, backgroundColor: isPast ? '#f7fafc' : 'white' }} 
+                  >
+                    <div className="appt-time">
+                      {apptDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      <br/>
+                      @ {apptDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div 
+                      className="appt-status" 
+                      style={{
+                        marginTop: '8px', 
+                        fontWeight: 'bold',
+                        // Change color based on past/future status
+                        color: isPast ? '#718096' : '#38B2AC' 
+                      }}
+                    >
+                      {isPast ? '✓ Completed' : 'Confirmed'}
+                    </div>
                   </div>
-                  <div className="appt-status" style={{marginTop: '8px'}}>
-                    Confirmed
-                  </div>
-                </div>
-              ))
+                );
+              })
           ) : (
-            // Empty state when no appointments exist
+            // Empty state when no valid appointments exist
             <div className="empty-state">
               Your scheduled appointments will appear here.
             </div>
