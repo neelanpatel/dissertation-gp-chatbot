@@ -115,6 +115,9 @@ function App() {
   const [isEmergencyLock, setIsEmergencyLock] = useState(false);
   const chatWindowRef = useRef(null);
 
+  // State to store the NHS source snippet from the backend
+  const [medicalSource, setMedicalSource] = useState(null);
+
   // Pre-populate with standard welcome message
   const [chatHistory, setChatHistory] = useState([
     { 
@@ -150,6 +153,7 @@ function App() {
     setIsEmergencyLock(false);
     setLastBooking(null);
     setShowBookingConfirmation(false);
+    setMedicalSource(null);
   };
 
   // Fetch saved chat logs from the database
@@ -244,6 +248,8 @@ function App() {
     setIsLoading(true);
     setInputValue('');
 
+    setMedicalSource(null);
+
     try {
       const response = await fetch('http://localhost:8000/chat', {
         method: 'POST',
@@ -265,6 +271,11 @@ function App() {
       // Check for the emergency status trigger
       if (data.status === 'emergency') {
         setIsEmergencyLock(true);
+      }
+
+      // Check for NHS source data from the backend
+      if (data.source) {
+        setMedicalSource(data.source);
       }
       
       // Check if this is a booking confirmation
@@ -359,6 +370,41 @@ function App() {
 
       {/* Main chat interface */}
       <div className="chat-container">
+        
+        {/* Medical Source Pop-up Card */}
+        {medicalSource && (
+          <div className="medical-source-card">
+            <div className="medical-source-header">
+              <h4 className="medical-source-title">
+                 NHS Verified Info
+              </h4>
+              <button 
+                className="medical-source-close"
+                onClick={() => setMedicalSource(null)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <p className="medical-source-condition">
+              Condition: {medicalSource.condition}
+            </p>
+            
+            <p className="medical-source-text">
+              "{medicalSource.text}"
+            </p>
+            
+            <a 
+              href={medicalSource.url} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="medical-source-link"
+            >
+              View full page on NHS.uk <span style={{marginLeft: '4px'}}>→</span>
+            </a>
+          </div>
+        )}
+
         <div className="chat-history" ref={chatWindowRef}>
           {chatHistory.map((msg, index) => (
             <div key={index} className={`message ${msg.sender === 'user' ? 'user' : 'assistant'}`}>

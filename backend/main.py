@@ -556,6 +556,9 @@ async def refresh_appointments():
 async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_message = request.message
     history = request.history
+    
+    # Variable to capture the official NHS source if the tool is used
+    medical_source = None
 
     # save the user's incoming message
     conn = get_db_connection()
@@ -727,9 +730,25 @@ Be warm, professional, and concise."""
                         else:
                             function_response = function_to_call()
                         
+                        # --- CAPTURE SOURCE DATA HERE ---
+                        # If the triage tool was called successfully, extract the source details
+                        if function_name == "get_triage_recommendation_from_kb":
+                            data = json.loads(function_response)
+                            if data.get("status") == "found" and data.get("context"):
+                                # Grab the best match (the first chunk)
+                                best_match = data["context"][0]
+                                medical_source = {
+                                    "condition": best_match.get("condition_name", "Medical Condition"),
+                                    "text": best_match.get("source_explanation", ""),
+                                    "url": best_match.get("source_url", "")
+                                }
+                        # --------------------------------
+
                     except TypeError as e:
                          # Handle cases where LLM sends extra/wrong args
                          function_response = json.dumps({"status": "error", "message": f"Argument error: {str(e)}"})
+                    except Exception as e:
+                         function_response = json.dumps({"status": "error", "message": f"Error: {str(e)}"})
 
                 messages.append({
                     "tool_call_id": tool_call.id,
@@ -764,7 +783,8 @@ Be warm, professional, and concise."""
 
     return {
         "response": agent_response,
-        "status": "normal"
+        "status": "normal",
+        "source": medical_source
     }
 
 if __name__ == "__main__":
