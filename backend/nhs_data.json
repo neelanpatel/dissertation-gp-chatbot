@@ -1,11 +1,59 @@
 [
   {
-    "condition_name": "Common Cold",
-    "search_chunk": "Condition: Common Cold. Overview: The common cold is a viral infection of your nose and throat. Symptoms: Blocked or runny nose, sore throat, headaches, muscle aches, cough, sneezing, raised temperature, pressure in ears and face, loss of taste and smell.",
-    "symptoms": "Blocked or runny nose, sore throat, headaches, muscle aches, cough, sneezing, raised temperature, pressure in ears and face, loss of taste and smell",
-    "triage_advice": "Pharmacist",
-    "source_explanation": "A pharmacist can help with cold medicines. You can buy cough and cold medicines from pharmacies or supermarkets. A pharmacist can advise you on the best medicine.",
-    "source_url": "https://www.nhs.uk/conditions/common-cold/"
+    "condition_name": "Chest Infection",
+    "search_chunk": "Condition: Chest Infection. Overview: Chest infections affect your lungs or airways. Symptoms: Persistent chesty cough with yellow or green phlegm, wheezing, high temperature.",
+    "symptoms": "Persistent chesty cough with yellow or green phlegm, wheezing, high temperature",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if you have a chest infection and you feel very unwell or your symptoms get worse.",
+    "source_url": "https://www.nhs.uk/conditions/chest-infection/"
+  },
+  {
+    "condition_name": "Back Pain",
+    "search_chunk": "Condition: Back Pain. Overview: Back pain is very common and usually improves within a few weeks. Symptoms: Aching or stiffness in the back, sharp pain in the neck or lower back.",
+    "symptoms": "Aching or stiffness in the back, sharp pain in the neck or lower back",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if your back pain does not improve after a few weeks or is severe.",
+    "source_url": "https://www.nhs.uk/conditions/back-pain/"
+  },
+  {
+    "condition_name": "Chest Infection",
+    "search_chunk": "Condition: Chest Infection. Overview: Chest infections affect your lungs or airways. Symptoms: Persistent chesty cough with yellow or green phlegm, wheezing and shortness of breath, chest pain or discomfort, high temperature, headache, aching muscles, tiredness.",
+    "symptoms": "Persistent chesty cough with yellow or green phlegm, wheezing and shortness of breath, chest pain or discomfort, high temperature, headache, aching muscles, tiredness",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if you have a chest infection and you feel very unwell.",
+    "source_url": "https://www.nhs.uk/conditions/chest-infection/"
+  },
+  {
+    "condition_name": "Shingles",
+    "search_chunk": "Condition: Shingles. Overview: Shingles is an infection that causes a painful rash. Symptoms: Painful, red, blistery rash on your arm, body, or face, tingling or burning feeling, headache, feeling generally unwell.",
+    "symptoms": "Painful, red, blistery rash on your arm, body, or face, tingling or burning feeling, headache, feeling generally unwell",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if you suspect shingles. You need medicine within 3 days of the rash appearing to help prevent long-lasting pain.",
+    "source_url": "https://www.nhs.uk/conditions/shingles/"
+  },
+  {
+    "condition_name": "Stroke",
+    "search_chunk": "Condition: Stroke. Overview: A stroke is a serious life-threatening medical condition that happens when the blood supply to part of the brain is cut off. Symptoms: Face drooping on one side, unable to smile, cannot lift both arms and keep them there, slurred speech or difficulty understanding what someone is saying.",
+    "symptoms": "Face drooping on one side, unable to smile, cannot lift both arms and keep them there, slurred speech or difficulty understanding what someone is saying",
+    "triage_advice": "Emergency",
+    "source_explanation": "Call 999 immediately if you notice any single one of the signs of a stroke (Face, Arms, Speech, Time).",
+    "source_url": "https://www.nhs.uk/conditions/stroke/"
+  },
+  {
+    "condition_name": "Meningitis",
+    "search_chunk": "Condition: Meningitis. Overview: Meningitis is an infection of the protective membranes that surround the brain and spinal cord. Symptoms: High temperature, cold hands and feet, stiff neck, dislike of bright lights, a rash that does not fade when a glass is rolled over it.",
+    "symptoms": "High temperature, cold hands and feet, stiff neck, dislike of bright lights, a rash that does not fade when a glass is rolled over it",
+    "triage_advice": "Emergency",
+    "source_explanation": "Call 999 or go to A&E immediately. Meningitis is a medical emergency. A rash that does not fade under a glass is a critical warning sign.",
+    "source_url": "https://www.nhs.uk/conditions/meningitis/"
+  },
+  {
+    "condition_name": "Sepsis",
+    "search_chunk": "Condition: Sepsis. Overview: Sepsis is a life-threatening reaction to an infection. Symptoms: Blue, pale or blotchy skin, lips or tongue, a rash that does not fade, difficulty breathing, severe breathlessness, confusion, slurred speech.",
+    "symptoms": "Blue, pale or blotchy skin, lips or tongue, a rash that does not fade, difficulty breathing, severe breathlessness, confusion, slurred speech",
+    "triage_advice": "Emergency",
+    "source_explanation": "Call 999 or go to A&E immediately if you have symptoms of sepsis. It is a life-threatening medical emergency.",
+    "source_url": "https://www.nhs.uk/conditions/sepsis/"
   },
   {
     "condition_name": "Flu",
@@ -16,11 +64,35 @@
     "source_url": "https://www.nhs.uk/conditions/flu/"
   },
   {
-    "condition_name": "Chest Infection",
-    "search_chunk": "Condition: Chest Infection. Overview: Chest infections affect your lungs or airways. Symptoms: Persistent chesty cough with yellow or green phlegm, wheezing and shortness of breath, chest pain or discomfort, high temperature, headache, aching muscles, tiredness.",
-    "symptoms": "Persistent chesty cough with yellow or green phlegm, wheezing and shortness of breath, chest pain or discomfort, high temperature, headache, aching muscles, tiredness",
-    "triage_advice": "GP",
-    "source_explanation": "See a GP if you have a chest infection and you feel very unwell.",
-    "source_url": "https://www.nhs.uk/conditions/chest-infection/"
+    "condition_name": "Common Cold",
+    "search_chunk": "Condition: Common Cold. Overview: The common cold is a viral infection of your nose and throat. Symptoms: Blocked or runny nose, sore throat, headaches, muscle aches, cough, sneezing, raised temperature, pressure in ears and face, loss of taste and smell.",
+    "symptoms": "Blocked or runny nose, sore throat, headaches, muscle aches, cough, sneezing, raised temperature, pressure in ears and face, loss of taste and smell",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with cold medicines. You can buy cough and cold medicines from pharmacies or supermarkets. A pharmacist can advise you on the best medicine.",
+    "source_url": "https://www.nhs.uk/conditions/common-cold/"
+  },
+  {
+    "condition_name": "Food Poisoning",
+    "search_chunk": "Condition: Food Poisoning. Overview: Food poisoning is an illness caused by eating contaminated food. Symptoms: Feeling sick (nausea), diarrhoea, being sick (vomiting), stomach cramps, high temperature.",
+    "symptoms": "Feeling sick (nausea), diarrhoea, being sick (vomiting), stomach cramps, high temperature",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can help with food poisoning by recommending oral rehydration sachets to prevent dehydration.",
+    "source_url": "https://www.nhs.uk/conditions/food-poisoning/"
+  },
+  {
+    "condition_name": "Conjunctivitis",
+    "search_chunk": "Condition: Conjunctivitis. Overview: Conjunctivitis is an eye condition caused by infection or allergies. Symptoms: Red, itchy, sticky, or watery eyes, crust on your eyelashes.",
+    "symptoms": "Red, itchy, sticky, or watery eyes, crust on your eyelashes",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist or optician can help with conjunctivitis. They can offer advice and provide eye drops or antihistamines.",
+    "source_url": "https://www.nhs.uk/conditions/conjunctivitis/"
+  },
+  {
+    "condition_name": "Toothache",
+    "search_chunk": "Condition: Toothache. Overview: Tooth pain can be caused by tooth decay, a cracked tooth, or an infection. Symptoms: Continuous sharp or throbbing pain in your tooth or mouth, swelling around the tooth, pain when chewing.",
+    "symptoms": "Continuous sharp or throbbing pain in your tooth or mouth, swelling around the tooth, pain when chewing",
+    "triage_advice": "Dentist",
+    "source_explanation": "A GP cannot provide dental treatment. You must see a dentist if you have a toothache that lasts more than 2 days.",
+    "source_url": "https://www.nhs.uk/conditions/toothache/"
   }
 ]
