@@ -805,6 +805,48 @@ async def reschedule_appointment(request: RescheduleRequest, current_user: dict 
         conn.close()
 
 
+class VerifyIdentityRequest(BaseModel):
+    username: str
+    dob: str
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    dob: str
+    new_password: str
+
+@app.post("/auth/verify-identity")
+async def verify_identity(request: VerifyIdentityRequest):
+    """Verifies username and DOB match before allowing a password reset."""
+    conn = get_db_connection()
+    user = conn.execute(
+        "SELECT id FROM users WHERE username = ? AND dob = ?",
+        (request.username, request.dob)
+    ).fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with those details.")
+    return {"status": "verified"}
+
+@app.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Resets the password after identity has been verified via DOB."""
+    conn = get_db_connection()
+    user = conn.execute(
+        "SELECT id FROM users WHERE username = ? AND dob = ?",
+        (request.username, request.dob)
+    ).fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Identity verification failed.")
+    conn.execute(
+        "UPDATE users SET password = ? WHERE id = ?",
+        (get_password_hash(request.new_password), user['id'])
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Password reset successfully."}
+
+
 @app.post("/chat")
 async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_message = request.message

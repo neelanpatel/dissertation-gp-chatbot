@@ -2,8 +2,142 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
 
+
+function ForgotPasswordForm({ onBack }) {
+  const [step, setStep] = React.useState('verify'); // 'verify' or 'reset'
+  const [username, setUsername] = React.useState('');
+  const [dob, setDob] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/auth/verify-identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, dob })
+      });
+      if (!response.ok) {
+        setError('No account found with those details. Please check your username and date of birth.');
+        return;
+      }
+      setStep('reset');
+    } catch (err) {
+      setError('Connection error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, dob, new_password: newPassword })
+      });
+      if (!response.ok) {
+        setError('Something went wrong. Please try again.');
+        return;
+      }
+      setStep('success');
+    } catch (err) {
+      setError('Connection error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (step === 'success') {
+    return (
+      <div className="auth-wrapper">
+        <div className="auth-container">
+          <h2>✅ Password Reset</h2>
+          <p>Your password has been updated successfully.</p>
+          <button type="button" onClick={onBack} style={{width:'100%', background:'var(--primary-teal)', color:'white', border:'none', padding:'18px', fontSize:'17px', fontWeight:'600', borderRadius:'16px', cursor:'pointer', marginTop:'10px'}}>
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="auth-wrapper">
+      <div className="auth-container">
+        <h2>🔑 Reset Password</h2>
+        {step === 'verify' ? (
+          <>
+            <p>Enter your username and date of birth to verify your identity.</p>
+            {error && <div style={{color:'#E53E3E', marginBottom:'15px', fontWeight:'500'}}>{error}</div>}
+            <form onSubmit={handleVerify}>
+              <input
+                placeholder="Username"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                required
+              />
+              <input
+                type="date"
+                value={dob}
+                onChange={e => setDob(e.target.value)}
+                required
+              />
+              <button type="submit" disabled={isLoading}>
+                {isLoading ? 'Verifying...' : 'Verify Identity'}
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <p>Identity verified. Please enter your new password.</p>
+            {error && <div style={{color:'#E53E3E', marginBottom:'15px', fontWeight:'500'}}>{error}</div>}
+            <form onSubmit={handleReset}>
+              <input
+                type="password"
+                placeholder="New Password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Confirm New Password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                required
+              />
+              <button type="submit" disabled={isLoading}>
+                {isLoading ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </form>
+          </>
+        )}
+        <div style={{marginTop:'25px'}}>
+          <button className="auth-link" onClick={onBack}>← Back to Login</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // Login form for existing patients
-function LoginForm({ onLogin, onSwitchToRegister }) {
+function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -50,6 +184,7 @@ function LoginForm({ onLogin, onSwitchToRegister }) {
           <button type="submit">Log In</button>
         </form>
         <div style={{marginTop: '25px'}}>
+          <button className="auth-link" onClick={onForgotPassword} style={{display:'block', marginBottom:'12px'}}>Forgot password?</button>
           <p style={{marginBottom: '5px', fontSize: '0.9rem'}}>New to the practice?</p>
           <button className="auth-link" onClick={onSwitchToRegister}>Register as a new patient</button>
         </div>
@@ -639,9 +774,9 @@ function App() {
   };
 
   if (!token) {
-    return view === 'register' 
-      ? <RegisterForm onLogin={handleLogin} onSwitchToLogin={() => setView('login')} />
-      : <LoginForm onLogin={handleLogin} onSwitchToRegister={() => setView('register')} />;
+    if (view === 'register') return <RegisterForm onLogin={handleLogin} onSwitchToLogin={() => setView('login')} />;
+    if (view === 'forgot') return <ForgotPasswordForm onBack={() => setView('login')} />;
+    return <LoginForm onLogin={handleLogin} onSwitchToRegister={() => setView('register')} onForgotPassword={() => setView('forgot')} />;
   }
 
   return (
