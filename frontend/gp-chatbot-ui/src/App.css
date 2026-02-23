@@ -464,8 +464,10 @@ body {
 .message-content-wrapper {
   display: flex;
   flex-direction: column;
+  width: fit-content;
   max-width: 65%;
   gap: 8px; /* Space between chat bubble and source card */
+  min-width: 0;
 }
 
 /* Ensure user messages align to the right */
@@ -486,8 +488,10 @@ body {
   border-radius: 8px;
   padding: 14px 16px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-  width: 100%;
+  min-width: 280px;
+  max-width: 100%;
   box-sizing: border-box;
+  align-self: stretch;
   animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

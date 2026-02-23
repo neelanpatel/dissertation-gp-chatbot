@@ -280,7 +280,8 @@ function App() {
         if (data.length > 0) {
           const formattedHistory = data.map(msg => ({
             sender: msg.role === 'user' ? 'user' : 'agent',
-            text: msg.content
+            text: msg.content,
+            source: msg.source || null 
           }));
           // Prepend the welcome message so it's always at the top
           setChatHistory([

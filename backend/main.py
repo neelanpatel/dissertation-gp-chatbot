@@ -116,7 +116,13 @@ def initialise_database():
         cursor.execute("ALTER TABLE users ADD COLUMN prescriptions TEXT DEFAULT 'None active.'")
     except sqlite3.OperationalError:
         pass # Columns already exist
-    
+        
+    # NEW: Safely add the source column to messages
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN source TEXT")
+    except sqlite3.OperationalError:
+        pass 
+        
     conn.commit()
     conn.close()
 
@@ -563,11 +569,11 @@ async def fetch_history(current_user: dict = Depends(get_current_user)):
     """Retrieves the last 50 messages for the authenticated user to restore chat context."""
     conn = get_db_connection()
     
-    # Use a subquery to grab the newest 50 (DESC), then re-sort them chronologically (ASC)
+    # Added 'source' to the SELECT statements
     messages = conn.execute("""
-        SELECT role, content, timestamp 
+        SELECT role, content, timestamp, source 
         FROM (
-            SELECT id, role, content, timestamp 
+            SELECT id, role, content, timestamp, source 
             FROM messages 
             WHERE user_id = ? 
             ORDER BY timestamp DESC 
@@ -578,8 +584,15 @@ async def fetch_history(current_user: dict = Depends(get_current_user)):
     
     conn.close()
     
-    # Convert the SQLite rows into standard dictionaries for JSON response
-    return [dict(msg) for msg in messages]
+    # Parse the source JSON back into a dictionary for the frontend
+    formatted_messages = []
+    for msg in messages:
+        msg_dict = dict(msg)
+        if msg_dict.get('source'):
+            msg_dict['source'] = json.loads(msg_dict['source'])
+        formatted_messages.append(msg_dict)
+        
+    return formatted_messages
 
 @app.get("/appointments")
 async def list_appointments(current_user: dict = Depends(get_current_user)):
@@ -635,6 +648,7 @@ CRITICAL SAFETY RULES & RED FLAG CONFIRMATION (HIGHEST PRIORITY):
 2. CONFIRMATION STEP (Reducing False Positives): 
    - If the user mentions a red flag symptom but the context is ambiguous, historical, or mild (e.g., "I had chest pain yesterday", "my chest hurts when I cough with this cold"), DO NOT immediately trigger an emergency.
    - Instead, ask ONE direct clarifying question to determine if it is an acute, severe medical emergency right now (e.g., "Just to be safe, are you experiencing severe, crushing chest pain right now?").
+   - CRITICAL: Even if the `get_triage_recommendation_from_kb` tool advises an 'Emergency', you MUST STILL complete this confirmation step first, unless the user explicitly stated the symptom is currently life-threatening.
 3. TRIGGERING THE ALARM: 
    - ONLY if the user CONFIRMS the symptom is currently severe/life-threatening, OR if their initial message is unambiguously an active emergency (e.g., "I think I'm having a heart attack"), you MUST respond ONLY with the exact phrase: "EMERGENCY_DETECTED". 
    - Do not provide any other text when triggering the alarm.
@@ -650,11 +664,16 @@ HUMAN FALLBACK & UNCERTAINTY:
 3. However, you MUST STILL offer to book a GP appointment for them so they can be evaluated safely by a clinician. (Note: If it sounds like a severe emergency, follow the red flag rules above instead).
 
 DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
+DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
 1. ASSESS THE INPUT: Read the user's message. Does it contain specific physical or mental symptoms (e.g., "sore throat, cough, back pain") or is it vague/missing (e.g., "I feel unwell", "I need an appointment")?
 2. GATHER (If necessary): If symptoms are missing or too vague to run a search, ask ONE direct clarifying question to gather them. Do NOT ask redundant follow-up questions if the user has already provided specific symptoms.
 3. SEARCH (When ready): As soon as you have specific symptoms, you MUST IMMEDIATELY call `get_triage_recommendation_from_kb`. Do not delay or ask for further confirmation.
-4. NO GUESSING: DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You must only provide advice based on the output of the tool.
-5. RESOLUTION: If the tool returns a `low_confidence` status, tell the user you cannot assess the symptom but immediately transition to booking an appointment. If it returns a confident match, present the advice and transition to booking if 'GP' is advised.
+4. NO GUESSING: DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You MUST ONLY provide advice based on the output of the tool. YOU MUST NOT DIAGNOSE OR SUGGEST REMEDIES WITHOUT CALLING THE TOOL FIRST.
+5. CRITICAL — NO SKIPPING BASED ON HISTORY: You MUST call `get_triage_recommendation_from_kb` for EVERY message that contains symptoms in the CURRENT turn, without exception. Even if identical or similar symptoms appear earlier in the conversation history, you MUST call the tool again now. Prior conversation context NEVER substitutes for a fresh tool call. Responding from memory instead of calling the tool is a patient safety violation.
+6. RESOLUTION: 
+   - If the tool returns `low_confidence`, transition to booking an appointment. 
+   - If it advises 'GP' or 'Pharmacist', present the advice. 
+   - If it advises an 'Emergency', you MUST ask a clarifying question to confirm severity before triggering the alarm.
 
 BOOKING WORKFLOW (STRICTLY AFTER TRIAGE):
 1. PREREQUISITE: You MUST NOT offer or book an appointment unless you have gathered symptoms AND run the `get_triage_recommendation_from_kb` tool. You are permitted to book an appointment if the tool advises 'GP' OR if it returns 'low_confidence'.
@@ -782,26 +801,32 @@ Be warm, professional, and concise."""
                             function_response = function_to_call(**function_args)
                         else:
                             function_response = function_to_call()
-                        
-                        # --- CAPTURE SOURCE DATA HERE ---
-                        # If the triage tool was called successfully, extract the source details
+                    except TypeError as e:
                         if function_name == "get_triage_recommendation_from_kb":
-                            data = json.loads(function_response)
-                            if data.get("status") == "found" and data.get("context"):
-                                # Grab the best match (the first chunk)
-                                best_match = data["context"][0]
+                            try:
+                                symptom = json.loads(tool_call.function.arguments).get("symptom_description", "")
+                                function_response = function_to_call(symptom_description=symptom)
+                            except Exception:
+                                function_response = json.dumps({"status": "error", "message": "Could not parse triage arguments."})
+                        else:
+                            function_response = json.dumps({"status": "error", "message": f"Argument error: {str(e)}"})
+                    except Exception as e:
+                        function_response = json.dumps({"status": "error", "message": f"Error: {str(e)}"})
+
+                    # Capture source data here
+                    # Moved outside try/except so it always runs on the final function_response
+                    if function_name == "get_triage_recommendation_from_kb":
+                        try:
+                            triage_data = json.loads(function_response)
+                            if triage_data.get("status") == "found" and triage_data.get("context"):
+                                best_match = triage_data["context"][0]
                                 medical_source = {
                                     "condition": best_match.get("condition_name", "Medical Condition"),
                                     "text": best_match.get("source_explanation", ""),
                                     "url": best_match.get("source_url", "")
                                 }
-                        # --------------------------------
-
-                    except TypeError as e:
-                         # Handle cases where LLM sends extra/wrong args
-                         function_response = json.dumps({"status": "error", "message": f"Argument error: {str(e)}"})
-                    except Exception as e:
-                         function_response = json.dumps({"status": "error", "message": f"Error: {str(e)}"})
+                        except (json.JSONDecodeError, IndexError, KeyError):
+                            pass
 
                 messages.append({
                     "tool_call_id": tool_call.id,
@@ -819,9 +844,13 @@ Be warm, professional, and concise."""
 
     # Save the AI's final response
     response_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Convert the dictionary to a JSON string for SQLite storage
+    source_json = json.dumps(medical_source) if medical_source else None
+    
     conn.execute(
-        "INSERT INTO messages (user_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-        (current_user['id'], 'assistant', agent_response, response_time)
+        "INSERT INTO messages (user_id, role, content, timestamp, source) VALUES (?, ?, ?, ?, ?)",
+        (current_user['id'], 'assistant', agent_response, response_time, source_json)
     )
     conn.commit()
     conn.close()
