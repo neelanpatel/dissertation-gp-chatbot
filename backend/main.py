@@ -261,7 +261,7 @@ def get_available_appointments():
         "appointments_grouped": grouped_for_display
     })
 
-def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day: str, requested_time: str):
+def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day: str, requested_time: str, notes: str = None):
     """
     Attempts to match a fuzzy natural language date request to a specific database slot.
     Booking logic securely links the confirmed slot to the authenticated user ID.
@@ -309,9 +309,10 @@ def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day:
                         patient_name = ?, 
                         booking_reference = ?,
                         booked_at = ?,
-                        status = 'confirmed'
+                        status = 'confirmed',
+                        notes = ?
                     WHERE id = ?
-                """, (user_id, patient_name, booking_ref, booked_at, slot['id']))
+                """, (user_id, patient_name, booking_ref, booked_at, notes, slot['id']))
                 
                 # Write to audit log
                 cursor.execute("""
@@ -646,7 +647,7 @@ async def list_appointments(current_user: dict = Depends(get_current_user)):
     """Endpoint for the user dashboard. Returns ONLY the logged-in user's appointments."""
     conn = get_db_connection()
     appointments = conn.execute("""
-        SELECT id, slot_time, booking_reference, appointment_type, status, patient_name
+        SELECT id, slot_time, booking_reference, appointment_type, status, patient_name, notes
         FROM appointments
         WHERE user_id = ?
         ORDER BY slot_time
@@ -920,6 +921,7 @@ BOOKING WORKFLOW (STRICTLY AFTER TRIAGE):
 4. After calling the tool, respond with ONLY a brief single sentence such as "Here are the available slots — please select a time below." Do NOT list the individual dates or times in your text response, as an interactive picker will be shown to the user automatically.
 5. Call `book_appointment_by_datetime`. 
    IMPORTANT: You already know their name is {current_user['full_name']}, so DO NOT ask for it.
+   NOTES: Always populate the `notes` field with a concise clinical summary, e.g. "Likely common cold. Triage: Pharmacist. Symptoms: sore throat, runny nose for 3 days." If no symptoms were discussed (routine checkup), set notes to "Routine checkup."
 
 CANCELLATION:
 1. If a user asks to cancel an appointment, immediately call `get_user_bookings`. Do NOT ask for the day, time, or booking reference first.
@@ -934,8 +936,8 @@ Be warm, professional, and concise."""
     messages = [system_prompt] + history + [{"role": "user", "content": user_message}]
     
     # Wrapper functions to securely inject the authenticated user_id without relying on the LLM
-    def book_appt_wrapper(requested_day, requested_time, patient_name=None):
-        return book_appointment_by_datetime(current_user['id'], current_user['full_name'], requested_day, requested_time)
+    def book_appt_wrapper(requested_day, requested_time, patient_name=None, notes=None):
+        return book_appointment_by_datetime(current_user['id'], current_user['full_name'], requested_day, requested_time, notes)
         
     def cancel_appt_wrapper(requested_day, requested_time):
         return cancel_appointment(current_user['id'], requested_day, requested_time)
@@ -979,6 +981,7 @@ Be warm, professional, and concise."""
                     "properties": {
                         "requested_day": {"type": "string", "description": "Day wanted (e.g. Monday)."},
                         "requested_time": {"type": "string", "description": "Time wanted (e.g. 9:00 AM)."},
+                        "notes": {"type": "string", "description": "A brief clinical summary for the appointment, including the triage recommendation and the likely condition based on symptoms discussed. Leave empty if booking is for a routine checkup with no symptoms discussed."},
                     },
                     "required": ["requested_day", "requested_time"],
                 },

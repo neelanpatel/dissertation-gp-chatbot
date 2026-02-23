@@ -814,12 +814,24 @@ function App() {
                       style={{
                         marginTop: '8px', 
                         fontWeight: 'bold',
-                        // Change color based on past/future status
                         color: isPast ? '#718096' : '#38B2AC' 
                       }}
                     >
                       {isPast ? '✓ Completed' : 'Confirmed'}
                     </div>
+                    {appt.notes && (
+                      <div style={{
+                        marginTop: '10px',
+                        marginLeft: '10px',
+                        fontSize: '0.78rem',
+                        color: '#718096',
+                        lineHeight: '1.4',
+                        borderTop: '1px solid #E2E8F0',
+                        paddingTop: '8px'
+                      }}>
+                        {appt.notes}
+                      </div>
+                    )}
                   </div>
                 );
               })
