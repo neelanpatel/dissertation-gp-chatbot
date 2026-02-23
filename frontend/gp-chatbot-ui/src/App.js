@@ -789,15 +789,22 @@ function App() {
 
         {/* Input area */}
         <div className="chat-input-area">
-          <input
-            type="text"
+          <textarea
+            rows={1}
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            // Update placeholder to explain why it's locked
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
             placeholder={isEmergencyLock ? "Chat disabled for your safety." : "Type your message here..."}
-            // Hard lock the input field
-            disabled={isLoading || isEmergencyLock} 
+            disabled={isLoading || isEmergencyLock}
           />
           <button onClick={handleSendMessage} disabled={isLoading || isEmergencyLock}>
             Send
