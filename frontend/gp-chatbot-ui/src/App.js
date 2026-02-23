@@ -256,6 +256,142 @@ function AppointmentPicker({ slots, onBook }) {
   );
 }
 
+function CancellationPicker({ bookings, onCancel }) {
+  return (
+    <div className="cancellation-picker">
+      <div className="picker-header">🗑 Select appointment to cancel</div>
+      <div className="cancel-bookings-list">
+        {bookings.map(booking => (
+          <button
+            key={booking.id}
+            className="cancel-booking-card"
+            onClick={() => onCancel(booking)}
+          >
+            <span className="cancel-booking-date">{booking.display_date}</span>
+            <span className="cancel-booking-time">{booking.display_time}</span>
+            <span className="cancel-booking-ref">{booking.booking_reference}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReschedulePicker({ data, token, onSuccess }) {
+  const [selectedBooking, setSelectedBooking] = React.useState(null);
+  const [selectedDate, setSelectedDate] = React.useState(null);
+  const [selectedTime, setSelectedTime] = React.useState(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  const slots = data.available_slots;
+  const dates = Object.keys(slots);
+  const canConfirm = selectedBooking && selectedDate && selectedTime && !isSubmitting;
+
+  const handleConfirm = async () => {
+    if (!canConfirm) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:8000/appointments/reschedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          old_appointment_id: selectedBooking.id,
+          requested_day: slots[selectedDate].date.split(',')[0].trim(),
+          requested_time: selectedTime
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(response.status === 409
+          ? 'That slot was just taken — please choose another time.'
+          : 'Something went wrong. Please try again.'
+        );
+        setSelectedDate(null);
+        setSelectedTime(null);
+        return;
+      }
+      onSuccess(result.message);
+    } catch (e) {
+      setError('Connection error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="reschedule-picker">
+      <div className="picker-header">🔄 Reschedule Appointment</div>
+      <div className="reschedule-panels">
+
+        {/* Left: current bookings */}
+        <div className="reschedule-panel reschedule-panel-left">
+          <div className="reschedule-panel-label">Current appointment</div>
+          {data.current_bookings.map(booking => (
+            <button
+              key={booking.id}
+              className={`reschedule-current-card ${selectedBooking?.id === booking.id ? 'active' : ''}`}
+              onClick={() => { setSelectedBooking(booking); setSelectedDate(null); setSelectedTime(null); }}
+            >
+              <span className="reschedule-booking-date">{booking.display_date}</span>
+              <span className="reschedule-booking-time">{booking.display_time}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Right: new slot picker */}
+        <div className={`reschedule-panel reschedule-panel-right ${!selectedBooking ? 'panel-disabled' : ''}`}>
+          <div className="reschedule-panel-label">New time</div>
+          {!selectedBooking ? (
+            <div className="reschedule-placeholder">Select a current appointment first</div>
+          ) : (
+            <>
+              <div className="picker-dates">
+                {dates.map(date => (
+                  <button
+                    key={date}
+                    className={`picker-date-btn ${selectedDate === date ? 'active' : ''}`}
+                    onClick={() => { setSelectedDate(selectedDate === date ? null : date); setSelectedTime(null); }}
+                  >
+                    {slots[date].date.split(',')[0]}
+                    <span>{slots[date].date.split(',').slice(1).join(',').trim()}</span>
+                  </button>
+                ))}
+              </div>
+              {selectedDate && (
+                <div className="picker-times">
+                  {slots[selectedDate].times.map(time => (
+                    <button
+                      key={time}
+                      className={`picker-time-btn ${selectedTime === time ? 'active' : ''}`}
+                      onClick={() => setSelectedTime(time)}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+      </div>
+      {error && <div className="reschedule-error">{error}</div>}
+      <button
+        className="reschedule-confirm-btn"
+        disabled={!canConfirm}
+        onClick={handleConfirm}
+      >
+        {isSubmitting ? 'Rescheduling...' : 'Confirm Reschedule'}
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const [token, setToken] = useState(sessionStorage.getItem('token'));
   const [view, setView] = useState(sessionStorage.getItem('token') ? 'dashboard' : 'login');
@@ -390,6 +526,41 @@ function App() {
     setTimeout(() => handleSendMessage(`Book ${dayName} at ${time}`), 50);
   };
 
+  const handleCancelFromPicker = async (booking) => {
+    try {
+      const response = await fetch('http://localhost:8000/appointments/cancel-by-id', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ appointment_id: booking.id })
+      });
+      const result = await response.json();
+      setChatHistory(prev => prev.map(msg =>
+        msg.cancellation_slots ? { ...msg, cancellation_slots: null } : msg
+      ));
+      if (response.ok) {
+        setChatHistory(prev => [...prev, { sender: 'agent', text: `✅ ${result.message}` }]);
+        fetchAppointments(token);
+      } else {
+        setChatHistory(prev => [...prev, { sender: 'agent', text: 'Sorry, I was unable to cancel that appointment. Please try again.' }]);
+      }
+    } catch (e) {
+      setChatHistory(prev => [...prev, { sender: 'agent', text: 'Connection error. Please try again.' }]);
+    }
+  };
+
+  const handleRescheduleSuccess = (message) => {
+    setChatHistory(prev => prev.map(msg =>
+      msg.reschedule_data ? { ...msg, reschedule_data: null } : msg
+    ));
+    setChatHistory(prev => [...prev, { sender: 'agent', text: `✅ ${message}` }]);
+    setShowBookingConfirmation(true);
+    setTimeout(() => setShowBookingConfirmation(false), 5000);
+    fetchAppointments(token);
+  };
+
   const handleSendMessage = async (overrideMessage) => {
     // Prevent API calls if locked 
     if (isEmergencyLock) return;
@@ -451,7 +622,9 @@ function App() {
         text: data.response,
         hasBooking: !!bookingInfo,
         source: data.source,
-        available_slots: data.available_slots || null
+        available_slots: data.available_slots || null,
+        cancellation_slots: data.cancellation_slots || null,
+        reschedule_data: data.reschedule_data || null
       };
 
       setChatHistory(prev => [...prev, newAgentMessage]);
@@ -565,6 +738,23 @@ function App() {
                   <AppointmentPicker
                     slots={msg.available_slots}
                     onBook={handleBookFromPicker}
+                  />
+                )}
+
+                {/* Inline Cancellation Picker */}
+                {msg.cancellation_slots && (
+                  <CancellationPicker
+                    bookings={msg.cancellation_slots}
+                    onCancel={handleCancelFromPicker}
+                  />
+                )}
+
+                {/* Inline Reschedule Widget */}
+                {msg.reschedule_data && (
+                  <ReschedulePicker
+                    data={msg.reschedule_data}
+                    token={token}
+                    onSuccess={handleRescheduleSuccess}
                   />
                 )}
 

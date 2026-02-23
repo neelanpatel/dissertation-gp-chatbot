@@ -824,3 +824,190 @@ body {
   background: var(--primary-light);
   transform: translateY(-1px);
 }
+
+/* Cancellation Picker */
+.cancellation-picker {
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-left: 4px solid #E53E3E;
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  min-width: 280px;
+  max-width: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cancel-bookings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cancel-booking-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-sage-grey);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.cancel-booking-card:hover {
+  border-color: #E53E3E;
+  background: #FFF5F5;
+}
+
+.cancel-booking-date {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.cancel-booking-time {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.cancel-booking-ref {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #A0AEC0;
+  background: #EDF2F7;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* Reschedule Widget */
+.reschedule-picker {
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-left: 4px solid var(--primary-teal);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  min-width: 320px;
+  max-width: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reschedule-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+  margin-bottom: 14px;
+}
+
+.reschedule-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reschedule-panel-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.reschedule-panel-right.panel-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.reschedule-current-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sage-grey);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.reschedule-current-card:hover {
+  border-color: var(--accent-sage);
+  background: #E6FFFA;
+}
+
+.reschedule-current-card.active {
+  border-color: var(--primary-teal);
+  background: #E6FFFA;
+}
+
+.reschedule-booking-date {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.reschedule-booking-time {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.reschedule-placeholder {
+  font-size: 0.85rem;
+  color: #A0AEC0;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.reschedule-error {
+  background: #FFF5F5;
+  border: 1px solid #FED7D7;
+  color: #C53030;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.reschedule-confirm-btn {
+  width: 100%;
+  background: var(--primary-teal);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reschedule-confirm-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.reschedule-confirm-btn:disabled {
+  background: #CBD5E0;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Active state for time buttons in reschedule widget */
+.picker-time-btn.active {
+  background: var(--primary-light);
+  outline: 2px solid var(--primary-teal);
+  outline-offset: 2px;
+}

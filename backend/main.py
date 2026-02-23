@@ -445,6 +445,53 @@ def get_triage_recommendation_from_kb(symptom_description: str):
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)})
 
+def get_user_bookings(user_id: int):
+    """Returns the user's current bookings formatted for the cancellation picker."""
+    conn = get_db_connection()
+    bookings = conn.execute("""
+        SELECT id, slot_time, booking_reference
+        FROM appointments
+        WHERE user_id = ? AND is_booked = 1
+        AND datetime(slot_time) > datetime('now')
+        ORDER BY slot_time
+    """, (user_id,)).fetchall()
+    conn.close()
+
+    if not bookings:
+        return json.dumps({"status": "none", "message": "You have no current bookings."})
+
+    formatted = []
+    for b in bookings:
+        slot_dt = datetime.strptime(b['slot_time'], '%Y-%m-%d %H:%M:%S')
+        formatted.append({
+            "id": b['id'],
+            "slot_time": b['slot_time'],
+            "booking_reference": b['booking_reference'],
+            "display_date": slot_dt.strftime('%A, %d %b'),
+            "display_time": slot_dt.strftime('%I:%M %p').lstrip('0'),
+        })
+
+    return json.dumps({"status": "found", "bookings": formatted})
+
+
+def get_reschedule_data(user_id: int):
+    """Returns current bookings + available slots in one payload for the reschedule widget."""
+    bookings_response = json.loads(get_user_bookings(user_id))
+    slots_response = json.loads(get_available_appointments())
+
+    if bookings_response.get("status") == "none":
+        return json.dumps({"status": "no_bookings", "message": "You have no current bookings to reschedule."})
+
+    if slots_response.get("status") != "available":
+        return json.dumps({"status": "no_slots", "message": "There are no available slots to reschedule to."})
+
+    return json.dumps({
+        "status": "ready",
+        "current_bookings": bookings_response["bookings"],
+        "available_slots": slots_response["appointments_grouped"]
+    })
+
+
 # FastAPI Configuration
 app = FastAPI()
 app.add_middleware(
@@ -618,6 +665,146 @@ async def refresh_appointments():
     
 
 
+class CancelByIdRequest(BaseModel):
+    appointment_id: int
+
+@app.post("/appointments/cancel-by-id")
+async def cancel_by_id(request: CancelByIdRequest, current_user: dict = Depends(get_current_user)):
+    """Directly cancels a specific appointment by ID. Used by the cancellation picker widget."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        appt = cursor.execute("""
+            SELECT id, patient_name, booking_reference, slot_time
+            FROM appointments
+            WHERE id = ? AND user_id = ? AND is_booked = 1
+        """, (request.appointment_id, current_user['id'])).fetchone()
+
+        if not appt:
+            raise HTTPException(status_code=404, detail="Appointment not found or does not belong to you.")
+
+        cursor.execute("""
+            UPDATE appointments
+            SET is_booked = 0, user_id = NULL, patient_name = NULL,
+                booking_reference = NULL, booked_at = NULL, status = 'available'
+            WHERE id = ?
+        """, (appt['id'],))
+
+        cursor.execute("""
+            INSERT INTO booking_history (appointment_id, action, patient_name, booking_reference, timestamp)
+            VALUES (?, 'cancelled', ?, ?, ?)
+        """, (appt['id'], appt['patient_name'], appt['booking_reference'],
+              datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+
+        conn.commit()
+        slot_dt = datetime.strptime(appt['slot_time'], '%Y-%m-%d %H:%M:%S')
+        return {
+            "status": "success",
+            "message": f"Your appointment on {slot_dt.strftime('%A, %d %b at %I:%M %p').lstrip('0')} has been cancelled."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+class RescheduleRequest(BaseModel):
+    old_appointment_id: int
+    requested_day: str
+    requested_time: str
+
+@app.post("/appointments/reschedule")
+async def reschedule_appointment(request: RescheduleRequest, current_user: dict = Depends(get_current_user)):
+    """Atomically cancels an existing appointment and books a new one in a single transaction."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        old_appt = cursor.execute("""
+            SELECT id, patient_name, booking_reference, slot_time
+            FROM appointments
+            WHERE id = ? AND user_id = ? AND is_booked = 1
+        """, (request.old_appointment_id, current_user['id'])).fetchone()
+
+        if not old_appt:
+            raise HTTPException(status_code=404, detail="Original appointment not found or does not belong to you.")
+
+        available = cursor.execute("""
+            SELECT id, slot_time FROM appointments
+            WHERE is_booked = 0 AND datetime(slot_time) > datetime('now')
+            ORDER BY slot_time
+        """).fetchall()
+
+        requested_time_clean = request.requested_time.strip().upper()
+        new_slot = None
+
+        for slot in available:
+            slot_dt = datetime.strptime(slot['slot_time'], '%Y-%m-%d %H:%M:%S')
+            slot_day = slot_dt.strftime('%A')
+            slot_time_12hr = slot_dt.strftime('%I:%M %p').lstrip('0').upper()
+            slot_date_full = slot_dt.strftime('%A, %B %d, %Y')
+
+            day_match = (request.requested_day.lower() in slot_day.lower() or
+                         request.requested_day.lower() in slot_date_full.lower())
+            time_match = requested_time_clean in slot_time_12hr
+
+            if day_match and time_match:
+                new_slot = slot
+                break
+
+        if not new_slot:
+            raise HTTPException(
+                status_code=409,
+                detail="That slot is no longer available. Please choose another time."
+            )
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        new_booking_ref = f"GP{new_slot['id']:04d}{datetime.now().strftime('%H%M')}"
+
+        # Cancel old
+        cursor.execute("""
+            UPDATE appointments
+            SET is_booked = 0, user_id = NULL, patient_name = NULL,
+                booking_reference = NULL, booked_at = NULL, status = 'available'
+            WHERE id = ?
+        """, (old_appt['id'],))
+
+        cursor.execute("""
+            INSERT INTO booking_history (appointment_id, action, patient_name, booking_reference, timestamp, reason)
+            VALUES (?, 'cancelled', ?, ?, ?, 'rescheduled')
+        """, (old_appt['id'], old_appt['patient_name'], old_appt['booking_reference'], now))
+
+        # Book new
+        cursor.execute("""
+            UPDATE appointments
+            SET is_booked = 1, user_id = ?, patient_name = ?,
+                booking_reference = ?, booked_at = ?, status = 'confirmed'
+            WHERE id = ?
+        """, (current_user['id'], current_user['full_name'], new_booking_ref, now, new_slot['id']))
+
+        cursor.execute("""
+            INSERT INTO booking_history (appointment_id, action, patient_name, booking_reference, timestamp)
+            VALUES (?, 'booked', ?, ?, ?)
+        """, (new_slot['id'], current_user['full_name'], new_booking_ref, now))
+
+        conn.commit()
+        new_slot_dt = datetime.strptime(new_slot['slot_time'], '%Y-%m-%d %H:%M:%S')
+        return {
+            "status": "success",
+            "booking_reference": new_booking_ref,
+            "message": f"Rescheduled to {new_slot_dt.strftime('%A, %d %b at %I:%M %p').lstrip('0')}",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Reschedule failed: {str(e)}")
+    finally:
+        conn.close()
+
+
 @app.post("/chat")
 async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_message = request.message
@@ -627,6 +814,9 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
     medical_source = None
     # Variable to capture structured slots for the frontend interactive picker
     available_slots = None
+    # Variables for cancellation and reschedule widgets
+    cancellation_slots = None
+    reschedule_data = None
     
     # save the user's incoming message
     conn = get_db_connection()
@@ -666,12 +856,16 @@ HUMAN FALLBACK & UNCERTAINTY:
 3. However, you MUST STILL offer to book a GP appointment for them so they can be evaluated safely by a clinician. (Note: If it sounds like a severe emergency, follow the red flag rules above instead).
 
 DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
-DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
 1. ASSESS THE INPUT: Read the user's message. Does it contain specific physical or mental symptoms (e.g., "sore throat, cough, back pain") or is it vague/missing (e.g., "I feel unwell", "I need an appointment")?
 2. GATHER (If necessary): If symptoms are missing or too vague to run a search, ask ONE direct clarifying question to gather them. Do NOT ask redundant follow-up questions if the user has already provided specific symptoms.
 3. SEARCH (When ready): As soon as you have specific symptoms, you MUST IMMEDIATELY call `get_triage_recommendation_from_kb`. Do not delay or ask for further confirmation.
 4. NO GUESSING: DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You MUST ONLY provide advice based on the output of the tool. YOU MUST NOT DIAGNOSE OR SUGGEST REMEDIES WITHOUT CALLING THE TOOL FIRST.
-5. CRITICAL — NO SKIPPING BASED ON HISTORY: You MUST call `get_triage_recommendation_from_kb` for EVERY message that contains symptoms in the CURRENT turn, without exception. Even if identical or similar symptoms appear earlier in the conversation history, you MUST call the tool again now. Prior conversation context NEVER substitutes for a fresh tool call. Responding from memory instead of calling the tool is a patient safety violation.
+5. CRITICAL — NO SKIPPING BASED ON HISTORY: You MUST call the required tool for EVERY relevant request in the CURRENT turn, without exception. This applies to ALL tools:
+   - `get_triage_recommendation_from_kb` must be called every time symptoms are mentioned, even if identical symptoms appear in history.
+   - `get_available_appointments` must be called every time the user wants to book, even if slots were fetched earlier in the conversation.
+   - `get_user_bookings` must be called every time the user wants to cancel, even if their bookings were fetched earlier.
+   - `get_reschedule_data` must be called every time the user wants to reschedule, even if this data was fetched earlier.
+   Prior conversation context NEVER substitutes for a fresh tool call. The interactive widgets are only shown when the tool is called in the current turn — if you skip the tool call, the user will see no widget and the feature will be broken.
 6. RESOLUTION: 
    - If the tool returns `low_confidence`, transition to booking an appointment. 
    - If it advises 'GP' or 'Pharmacist', present the advice. 
@@ -686,14 +880,12 @@ BOOKING WORKFLOW (STRICTLY AFTER TRIAGE):
    IMPORTANT: You already know their name is {current_user['full_name']}, so DO NOT ask for it.
 
 CANCELLATION:
-1. Ask the user for the day and time of the appointment they wish to cancel. Do NOT ask for a booking reference.
-2. Call `cancel_appointment` using the day and time they provide.
+1. If a user asks to cancel an appointment, immediately call `get_user_bookings`. Do NOT ask for the day, time, or booking reference first.
+2. A cancellation picker will be shown to the user automatically. Respond with only: "Here are your current appointments — please select the one you'd like to cancel."
 
 RESCHEDULING:
-1. If a user asks to reschedule, treat it as a two-step process.
-2. Step 1: Ask for the day and time of their *current* appointment, then call `cancel_appointment`.
-3. Step 2: Once cancelled, immediately call `get_available_appointments`, present the slots to the user, and use `book_appointment_by_datetime` to secure the new slot.
-
+1. If a user asks to reschedule, immediately call `get_reschedule_data`. Do NOT treat this as a two-step process or ask for any details first.
+2. A reschedule widget will be shown to the user automatically. Respond with only: "Please select the appointment you'd like to move and your preferred new time below."
 Be warm, professional, and concise."""
     }
     
@@ -705,6 +897,12 @@ Be warm, professional, and concise."""
         
     def cancel_appt_wrapper(requested_day, requested_time):
         return cancel_appointment(current_user['id'], requested_day, requested_time)
+
+    def get_user_bookings_wrapper():
+        return get_user_bookings(current_user['id'])
+
+    def get_reschedule_data_wrapper():
+        return get_reschedule_data(current_user['id'])
 
     # Define available tools (Functions) for the OpenAI model
     tools = [
@@ -744,6 +942,7 @@ Be warm, professional, and concise."""
                 },
             },
         },
+        
         {
             "type": "function",
             "function": {
@@ -759,14 +958,43 @@ Be warm, professional, and concise."""
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_user_bookings",
+                "description": "Retrieves the user's current booked appointments. Call this immediately when the user wants to cancel. Do NOT ask for day or time first — a picker will be shown automatically.",
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_reschedule_data",
+                "description": "Retrieves the user's current bookings AND available slots in one call. Call this immediately when the user wants to reschedule. Do NOT manage this as a two-step flow — a widget will be shown automatically.",
+            }
+        },
     ]
-    
+
     available_functions = {
         "get_triage_recommendation_from_kb": get_triage_recommendation_from_kb,
         "get_available_appointments": get_available_appointments,
         "book_appointment_by_datetime": book_appt_wrapper,
         "cancel_appointment": cancel_appt_wrapper,
+        "get_user_bookings": get_user_bookings_wrapper,
+        "get_reschedule_data": get_reschedule_data_wrapper,
     }
+
+    # Detect clear intent and force the correct tool on the first iteration.
+    # This bypasses LLM judgment entirely for widget-triggering scenarios,
+    # preventing the model from skipping tool calls based on conversation history.
+    msg_lower = user_message.lower()
+    
+    forced_tool_first_pass = "auto"
+    if any(w in msg_lower for w in ['reschedule', 'move my appointment', 'change my appointment', 'swap my appointment']):
+        forced_tool_first_pass = {"type": "function", "function": {"name": "get_reschedule_data"}}
+    elif any(w in msg_lower for w in ['cancel', 'remove my appointment', 'delete my appointment']):
+        forced_tool_first_pass = {"type": "function", "function": {"name": "get_user_bookings"}}
+    elif any(w in msg_lower for w in ['book an appointment', 'make an appointment', 'schedule an appointment', 'get an appointment', 'see a gp', 'see the gp']):
+        forced_tool_first_pass = {"type": "function", "function": {"name": "get_available_appointments"}}
 
     try:
         # Tool-calling loop with safety limit to prevent infinite recursion
@@ -777,7 +1005,7 @@ Be warm, professional, and concise."""
                 model="gpt-4o",
                 messages=messages,
                 tools=tools,
-                tool_choice="auto",
+                tool_choice=forced_tool_first_pass if iteration == 1 else "auto",
             )
             response_message = response.choices[0].message
             tool_calls = response_message.tool_calls
@@ -814,6 +1042,27 @@ Be warm, professional, and concise."""
                             function_response = json.dumps({"status": "error", "message": f"Argument error: {str(e)}"})
                     except Exception as e:
                         function_response = json.dumps({"status": "error", "message": f"Error: {str(e)}"})
+
+                    # Capture bookings for the cancellation picker
+                    if function_name == "get_user_bookings":
+                        try:
+                            cancel_data = json.loads(function_response)
+                            if cancel_data.get("status") == "found":
+                                cancellation_slots = cancel_data.get("bookings")
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+
+                    # Capture data for the reschedule widget
+                    if function_name == "get_reschedule_data":
+                        try:
+                            r_data = json.loads(function_response)
+                            if r_data.get("status") == "ready":
+                                reschedule_data = {
+                                    "current_bookings": r_data.get("current_bookings"),
+                                    "available_slots": r_data.get("available_slots")
+                                }
+                        except (json.JSONDecodeError, KeyError):
+                            pass
 
                     # Capture structured slots for the interactive frontend picker
                     if function_name == "get_available_appointments":
@@ -878,7 +1127,9 @@ Be warm, professional, and concise."""
         "response": agent_response,
         "status": "normal",
         "source": medical_source,
-        "available_slots": available_slots
+        "available_slots": available_slots,
+        "cancellation_slots": cancellation_slots,
+        "reschedule_data": reschedule_data
     }
 
 if __name__ == "__main__":
