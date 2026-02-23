@@ -102,12 +102,128 @@ function RegisterForm({ onLogin, onSwitchToLogin }) {
   );
 }
 
+
+function ProfilePage({ token, onBack }) {
+  const [profile, setProfile] = useState(null);
+  const [formData, setFormData] = useState({ username: '', password: '', full_name: '', address: '' });
+  const [status, setStatus] = useState({ message: '', type: '' });
+
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/users/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProfile(data);
+        setFormData({ username: data.username, full_name: data.full_name, address: data.address, password: '' });
+      }
+    } catch (err) {
+      console.error("Failed to load profile", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setStatus({ message: 'Updating...', type: 'info' });
+    
+    // Only send fields that have been changed/filled out
+    const payload = {};
+    if (formData.username !== profile.username) payload.username = formData.username;
+    if (formData.full_name !== profile.full_name) payload.full_name = formData.full_name;
+    if (formData.address !== profile.address) payload.address = formData.address;
+    if (formData.password) payload.password = formData.password;
+
+    if (Object.keys(payload).length === 0) {
+      setStatus({ message: 'No changes made.', type: 'info' });
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/users/me', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) throw new Error('Update failed');
+      setStatus({ message: 'Profile updated successfully!', type: 'success' });
+      fetchProfile(); // Refresh data
+      setFormData(prev => ({ ...prev, password: '' })); // Clear password field
+    } catch (err) {
+      setStatus({ message: 'Failed to update. Username might be taken.', type: 'error' });
+    }
+  };
+
+  if (!profile) return <div className="profile-container">Loading profile...</div>;
+
+  return (
+    <div className="profile-container">
+      <div className="profile-header">
+        <h2>👤 My Profile</h2>
+        <button onClick={onBack} className="back-btn">← Back to Chat</button>
+      </div>
+
+      <div className="profile-grid">
+        {/* Medical Info Section */}
+        <div className="profile-section medical-info">
+          <h3>🩺 Medical Information</h3>
+          <div className="info-card">
+            <h4>Repeat Prescriptions</h4>
+            <p>{profile.prescriptions}</p>
+          </div>
+          <div className="info-card">
+            <h4>Important Notes</h4>
+            <p>{profile.medical_notes}</p>
+          </div>
+          <div className="info-card">
+            <h4>Date of Birth</h4>
+            <p>{profile.dob}</p>
+          </div>
+        </div>
+
+        {/* Account Settings Section */}
+        <div className="profile-section account-settings">
+          <h3>⚙️ Account Settings</h3>
+          {status.message && (
+            <div className={`status-banner ${status.type}`}>
+              {status.message}
+            </div>
+          )}
+          <form onSubmit={handleUpdate} className="profile-form">
+            <label>Full Name</label>
+            <input value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} required />
+            
+            <label>Home Address</label>
+            <input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required />
+            
+            <label>Username</label>
+            <input value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+            
+            <label>Change Password (leave blank to keep current)</label>
+            <input type="password" placeholder="New Password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+            
+            <button type="submit" className="save-btn">Save Changes</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [token, setToken] = useState(sessionStorage.getItem('token'));
-  const [view, setView] = useState('login');
+  const [view, setView] = useState(sessionStorage.getItem('token') ? 'dashboard' : 'login');
   
   const [inputValue, setInputValue] = useState('');
-  const [lastBooking, setLastBooking] = useState(null);
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -115,8 +231,6 @@ function App() {
   const [isEmergencyLock, setIsEmergencyLock] = useState(false);
   const chatWindowRef = useRef(null);
 
-  // State to store the NHS source snippet from the backend
-  const [medicalSource, setMedicalSource] = useState(null);
 
   // Pre-populate with standard welcome message
   const [chatHistory, setChatHistory] = useState([
@@ -151,9 +265,7 @@ function App() {
     setAppointments([]);
     setInputValue('');
     setIsEmergencyLock(false);
-    setLastBooking(null);
     setShowBookingConfirmation(false);
-    setMedicalSource(null);
   };
 
   // Fetch saved chat logs from the database
@@ -248,7 +360,6 @@ function App() {
     setIsLoading(true);
     setInputValue('');
 
-    setMedicalSource(null);
 
     try {
       const response = await fetch('http://localhost:8000/chat', {
@@ -268,20 +379,16 @@ function App() {
       
       const data = await response.json();
 
+
       // Check for the emergency status trigger
       if (data.status === 'emergency') {
         setIsEmergencyLock(true);
       }
 
-      // Check for NHS source data from the backend
-      if (data.source) {
-        setMedicalSource(data.source);
-      }
       
       // Check if this is a booking confirmation
       const bookingInfo = parseBookingConfirmation(data.response);
       if (bookingInfo) {
-        setLastBooking(bookingInfo);
         setShowBookingConfirmation(true);
         setTimeout(() => setShowBookingConfirmation(false), 5000);
         fetchAppointments(token); 
@@ -292,7 +399,8 @@ function App() {
       const newAgentMessage = { 
         sender: 'agent', 
         text: data.response,
-        hasBooking: !!bookingInfo 
+        hasBooking: !!bookingInfo,
+        source: data.source 
       };
       setChatHistory(prev => [...prev, newAgentMessage]);
 
@@ -368,49 +476,55 @@ function App() {
         </button>
       </div>
 
-      {/* Main chat interface */}
+      {/* Main chat interface or Profile Page */}
       <div className="chat-container">
         
-        {/* Medical Source Pop-up Card */}
-        {medicalSource && (
-          <div className="medical-source-card">
-            <div className="medical-source-header">
-              <h4 className="medical-source-title">
-                 NHS Verified Info
-              </h4>
-              <button 
-                className="medical-source-close"
-                onClick={() => setMedicalSource(null)}
-              >
-                ×
-              </button>
-            </div>
-            
-            <p className="medical-source-condition">
-              Condition: {medicalSource.condition}
-            </p>
-            
-            <p className="medical-source-text">
-              "{medicalSource.text}"
-            </p>
-            
-            <a 
-              href={medicalSource.url} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="medical-source-link"
-            >
-              View full page on NHS.uk <span style={{marginLeft: '4px'}}>→</span>
-            </a>
-          </div>
-        )}
+        {/* Top Navigation Bar */}
+        <div className="top-nav-bar">
+          {view === 'dashboard' ? (
+            <button onClick={() => setView('profile')} className="profile-icon-btn" title="View Profile">
+              👤
+            </button>
+          ) : (
+            <div style={{height: '40px'}}></div> // Spacer when in profile view
+          )}
+        </div>
 
+        {view === 'profile' ? (
+          <ProfilePage token={token} onBack={() => setView('dashboard')} />
+        ) : (
+          <>
+
+        
+        {/* Medical Source Pop-up Card */}
+        
         <div className="chat-history" ref={chatWindowRef}>
           {chatHistory.map((msg, index) => (
             <div key={index} className={`message ${msg.sender === 'user' ? 'user' : 'assistant'}`}>
-              <div className="message-bubble">
-                {msg.text}
+              
+              {/* Wrapper to stack the bubble and the source card */}
+              <div className="message-content-wrapper">
+                <div className="message-bubble">
+                  {msg.text}
+                </div>
+                
+                {/* NEW: Inline Medical Source Card */}
+                {msg.source && (
+                  <div className="inline-medical-source">
+                    <div className="inline-source-header">
+                      <span className="nhs-logo-text">NHS</span> Verified Info
+                    </div>
+                    <div className="inline-source-body">
+                      <strong>{msg.source.condition}</strong>
+                      <p>"{msg.source.text}"</p>
+                      <a href={msg.source.url} target="_blank" rel="noopener noreferrer">
+                        Read full guidance on NHS.uk →
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
+
             </div>
           ))}
           
@@ -422,7 +536,7 @@ function App() {
             </div>
           )}
         </div>
-        
+
         {/* Input area */}
         <div className="chat-input-area">
           <input
@@ -481,6 +595,8 @@ function App() {
               I understand, reset session
             </button>
           </div>
+        )}
+          </>
         )}
       </div>
       

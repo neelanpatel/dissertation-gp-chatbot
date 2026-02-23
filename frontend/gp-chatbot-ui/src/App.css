@@ -460,76 +460,261 @@ body {
 }
 
 /* Medical Source Pop-up Card */
-.medical-source-card {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  width: 280px;
-  background: white;
-  border-left: 4px solid #3182ce;
-  border-radius: 8px;
-  padding: 12px 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 90;
-  font-size: 0.9rem;
-  animation: fadeIn 0.3s ease-in;
-}
 
-.medical-source-header {
+.message-content-wrapper {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  flex-direction: column;
+  max-width: 65%;
+  gap: 8px; /* Space between chat bubble and source card */
 }
 
-.medical-source-title {
-  margin: 0;
-  color: #2c5282;
-  font-size: 0.85rem;
+/* Ensure user messages align to the right */
+.message.user .message-content-wrapper {
+  align-items: flex-end;
+}
+
+/* Make sure the bubble takes up full width of the wrapper, but wrapper is constrained */
+.message-bubble {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.inline-medical-source {
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-left: 4px solid #005EB8; /* Official NHS Blue */
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  width: 100%;
+  box-sizing: border-box;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.inline-source-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4A5568;
+  margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.medical-source-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  color: #718096;
-  padding: 0;
+.nhs-logo-text {
+  background: #005EB8;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: 800;
+  letter-spacing: 1px;
 }
 
-.medical-source-condition {
-  font-weight: 700;
-  margin-bottom: 4px;
-  color: #2d3748;
+.inline-source-body strong {
+  display: block;
+  color: #2D3748;
+  font-size: 0.95rem;
+  margin-bottom: 6px;
 }
 
-.medical-source-text {
+.inline-source-body p {
+  margin: 0 0 12px 0;
   font-size: 0.85rem;
-  color: #4a5568;
-  line-height: 1.4;
-  margin-bottom: 10px;
+  color: #4A5568;
+  line-height: 1.5;
   font-style: italic;
-  background: #ebf8ff;
-  padding: 8px;
-  border-radius: 4px;
+  background: #F7FAFC;
+  padding: 10px;
+  border-radius: 6px;
 }
 
-.medical-source-link {
-  font-size: 0.8rem;
-  color: #3182ce;
+.inline-source-body a {
+  font-size: 0.85rem;
+  color: #005EB8;
   text-decoration: none;
   font-weight: 600;
   display: flex;
   align-items: center;
 }
 
-.medical-source-link:hover {
+.inline-source-body a:hover {
   text-decoration: underline;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+/* --- Profile Page & Navigation Styles --- */
+
+.top-nav-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 20px 30px 0 30px;
+  position: absolute; /* Floats over the chat */
+  top: 0;
+  right: 0;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 999; /* Boosted z-index to ensure it sits on top */
+  pointer-events: none;
+}
+
+.profile-icon-btn {
+  pointer-events: auto;
+  background: var(--white);
+  border: 1px solid #E2E8F0;
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-icon-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border-color: var(--accent-sage);
+}
+
+.profile-container {
+  flex: 1;
+  padding: 40px 60px;
+  overflow-y: auto;
+  background-color: var(--white);
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #F1F5F9;
+  padding-bottom: 20px;
+}
+
+.profile-header h2 {
+  color: var(--primary-teal);
+  margin: 0;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.back-btn:hover {
+  color: var(--primary-teal);
+  text-decoration: underline;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+
+.profile-section h3 {
+  color: var(--text-dark);
+  margin-bottom: 20px;
+  font-size: 1.2rem;
+}
+
+.info-card {
+  background: var(--bg-sage-grey);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 15px;
+  border-left: 4px solid var(--accent-sage);
+}
+
+.info-card h4 {
+  margin: 0 0 8px 0;
+  color: var(--primary-light);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-card p {
+  margin: 0;
+  color: var(--text-dark);
+  font-weight: 500;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.profile-form label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.profile-form input {
+  padding: 14px 18px;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  background: #F8FAFC;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.profile-form input:focus {
+  border-color: var(--accent-sage);
+  outline: none;
+  background: var(--white);
+}
+
+.save-btn {
+  background: var(--primary-teal);
+  color: white;
+  border: none;
+  padding: 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: all 0.2s;
+}
+
+.save-btn:hover {
+  background: var(--primary-light);
+  transform: translateY(-2px);
+}
+
+.status-banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.status-banner.success {
+  background-color: #C6F6D5;
+  color: #22543D;
+}
+
+.status-banner.error {
+  background-color: #FED7D7;
+  color: #822727;
+}
+
+.status-banner.info {
+  background-color: #EBF8FF;
+  color: #2A4365;
 }

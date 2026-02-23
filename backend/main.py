@@ -109,6 +109,13 @@ def initialise_database():
         FOREIGN KEY (user_id) REFERENCES users (id)
     )
     ''')
+
+    # Safely add new columns for the profile if they don't exist yet
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN medical_notes TEXT DEFAULT 'No known allergies. Routine health checks up to date.'")
+        cursor.execute("ALTER TABLE users ADD COLUMN prescriptions TEXT DEFAULT 'None active.'")
+    except sqlite3.OperationalError:
+        pass # Columns already exist
     
     conn.commit()
     conn.close()
@@ -421,7 +428,7 @@ def get_triage_recommendation_from_kb(symptom_description: str):
             # The match is too weak. Intercept the data before the LLM can guess.
             return json.dumps({
                 "status": "low_confidence", 
-                "message": "The system could not find a confident match for these symptoms. You MUST immediately trigger the HUMAN FALLBACK and ask the user to call the surgery on 01632 960000.",
+                "message": "The system could not find a confident match for these symptoms. Inform the user that you cannot provide specific medical advice for this, but immediately offer to book them a GP appointment to get it checked.",
                 "best_match_distance": best_match_distance
             })
 
@@ -502,8 +509,54 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
     return {
         "username": current_user['username'], 
         "full_name": current_user['full_name'],
-        "dob": current_user['dob']
+        "dob": current_user['dob'],
+        "address": current_user.get('address', ''),
+        "medical_notes": current_user.get('medical_notes', 'No known allergies. Routine health checks up to date.'),
+        "prescriptions": current_user.get('prescriptions', 'None active.')
     }
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    full_name: Optional[str] = None
+    address: Optional[str] = None
+
+@app.put("/users/me")
+async def update_user_profile(update_data: UserUpdate, current_user: dict = Depends(get_current_user)):
+    """Endpoint for patients to update their personal details."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    updates = []
+    params = []
+    
+    if update_data.username:
+        updates.append("username = ?")
+        params.append(update_data.username)
+    if update_data.password:
+        updates.append("password = ?")
+        params.append(get_password_hash(update_data.password))
+    if update_data.full_name:
+        updates.append("full_name = ?")
+        params.append(update_data.full_name)
+    if update_data.address:
+        updates.append("address = ?")
+        params.append(update_data.address)
+        
+    if not updates:
+        return {"status": "no_changes"}
+        
+    params.append(current_user['id'])
+    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+    
+    try:
+        cursor.execute(query, params)
+        conn.commit()
+        return {"status": "success", "message": "Profile updated successfully."}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Username already taken.")
+    finally:
+        conn.close()
 
 @app.get("/chat/history")
 async def fetch_history(current_user: dict = Depends(get_current_user)):
@@ -591,20 +644,20 @@ OUT-OF-BOUNDS QUERIES (STRICT GUARDRAIL):
 2. If the user asks about ANYTHING unrelated to these topics (e.g., programming, general knowledge, politics, creative writing, or financial advice), you MUST politely refuse to answer.
 3. Example refusal: "I am a medical assistant, so I can only help you with health-related concerns and booking GP appointments. How can I help you with your health today?"
 
-HUMAN FALLBACK & UNCERTAINTY :
-1. If the `get_triage_recommendation_from_kb` tool returns results that do not confidently match the user's symptoms, or if the symptoms are too complex and require multiple conflicting possibilities, DO NOT guess.
-2. You must immediately trigger a human fallback response to prioritize patient safety.
-3. Example fallback: "Based on what you've told me, my system isn't completely certain about the best advice for your specific symptoms. To ensure you get the safest care, please call the GP surgery directly on 01632 960000 to speak with our reception team or a clinician."
+HUMAN FALLBACK & UNCERTAINTY:
+1. If the `get_triage_recommendation_from_kb` tool returns a `low_confidence` status, DO NOT guess the medical condition.
+2. You must inform the user that your system isn't completely certain about the best medical advice for their specific symptoms.
+3. However, you MUST STILL offer to book a GP appointment for them so they can be evaluated safely by a clinician. (Note: If it sounds like a severe emergency, follow the red flag rules above instead).
 
 DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
 1. ASSESS THE INPUT: Read the user's message. Does it contain specific physical or mental symptoms (e.g., "sore throat, cough, back pain") or is it vague/missing (e.g., "I feel unwell", "I need an appointment")?
 2. GATHER (If necessary): If symptoms are missing or too vague to run a search, ask ONE direct clarifying question to gather them. Do NOT ask redundant follow-up questions if the user has already provided specific symptoms.
 3. SEARCH (When ready): As soon as you have specific symptoms, you MUST IMMEDIATELY call `get_triage_recommendation_from_kb`. Do not delay or ask for further confirmation.
 4. NO GUESSING: DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You must only provide advice based on the output of the tool.
-5. RESOLUTION: If the tool returns a `low_confidence` status, immediately trigger the human fallback. If it returns a confident match (e.g., advice is 'GP' or 'Pharmacist'), present that advice to the patient and transition to booking if 'GP' is advised.
+5. RESOLUTION: If the tool returns a `low_confidence` status, tell the user you cannot assess the symptom but immediately transition to booking an appointment. If it returns a confident match, present the advice and transition to booking if 'GP' is advised.
 
 BOOKING WORKFLOW (STRICTLY AFTER TRIAGE):
-1. PREREQUISITE: You MUST NOT offer or book an appointment unless you have gathered symptoms AND the `get_triage_recommendation_from_kb` tool has specifically advised seeing a GP. 
+1. PREREQUISITE: You MUST NOT offer or book an appointment unless you have gathered symptoms AND run the `get_triage_recommendation_from_kb` tool. You are permitted to book an appointment if the tool advises 'GP' OR if it returns 'low_confidence'.
 2. If a user asks for an appointment but hasn't given symptoms, politely explain that you need to do a quick symptom check first.
 3. Call `get_available_appointments`.
 4. Ask user to pick a time (e.g., "Monday at 9am").
