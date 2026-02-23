@@ -625,7 +625,9 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
     
     # Variable to capture the official NHS source if the tool is used
     medical_source = None
-
+    # Variable to capture structured slots for the frontend interactive picker
+    available_slots = None
+    
     # save the user's incoming message
     conn = get_db_connection()
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -679,7 +681,7 @@ BOOKING WORKFLOW (STRICTLY AFTER TRIAGE):
 1. PREREQUISITE: You MUST NOT offer or book an appointment unless you have gathered symptoms AND run the `get_triage_recommendation_from_kb` tool. You are permitted to book an appointment if the tool advises 'GP' OR if it returns 'low_confidence'.
 2. If a user asks for an appointment but hasn't given symptoms, politely explain that you need to do a quick symptom check first.
 3. Call `get_available_appointments`.
-4. Ask user to pick a time (e.g., "Monday at 9am").
+4. After calling the tool, respond with ONLY a brief single sentence such as "Here are the available slots — please select a time below." Do NOT list the individual dates or times in your text response, as an interactive picker will be shown to the user automatically.
 5. Call `book_appointment_by_datetime`. 
    IMPORTANT: You already know their name is {current_user['full_name']}, so DO NOT ask for it.
 
@@ -813,6 +815,15 @@ Be warm, professional, and concise."""
                     except Exception as e:
                         function_response = json.dumps({"status": "error", "message": f"Error: {str(e)}"})
 
+                    # Capture structured slots for the interactive frontend picker
+                    if function_name == "get_available_appointments":
+                        try:
+                            appt_data = json.loads(function_response)
+                            if appt_data.get("status") == "available":
+                                available_slots = appt_data.get("appointments_grouped")
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+
                     # Capture source data here
                     # Moved outside try/except so it always runs on the final function_response
                     if function_name == "get_triage_recommendation_from_kb":
@@ -866,7 +877,8 @@ Be warm, professional, and concise."""
     return {
         "response": agent_response,
         "status": "normal",
-        "source": medical_source
+        "source": medical_source,
+        "available_slots": available_slots
     }
 
 if __name__ == "__main__":

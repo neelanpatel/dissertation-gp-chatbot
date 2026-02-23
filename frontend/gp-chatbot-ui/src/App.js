@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import './App.css';
 
 // Login form for existing patients
@@ -219,6 +220,42 @@ function ProfilePage({ token, onBack }) {
   );
 }
 
+function AppointmentPicker({ slots, onBook }) {
+  const [selectedDate, setSelectedDate] = React.useState(null);
+  const dates = Object.keys(slots);
+
+  return (
+    <div className="appointment-picker">
+      <div className="picker-header">🗓 Select a date</div>
+      <div className="picker-dates">
+        {dates.map(date => (
+          <button
+            key={date}
+            className={`picker-date-btn ${selectedDate === date ? 'active' : ''}`}
+            onClick={() => setSelectedDate(selectedDate === date ? null : date)}
+          >
+            {slots[date].date.split(',')[0]}
+            <span>{slots[date].date.split(',').slice(1).join(',').trim()}</span>
+          </button>
+        ))}
+      </div>
+      {selectedDate && (
+        <div className="picker-times">
+          {slots[selectedDate].times.map(time => (
+            <button
+              key={time}
+              className="picker-time-btn"
+              onClick={() => onBook(slots[selectedDate].date, time)}
+            >
+              {time}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [token, setToken] = useState(sessionStorage.getItem('token'));
   const [view, setView] = useState(sessionStorage.getItem('token') ? 'dashboard' : 'login');
@@ -341,11 +378,23 @@ function App() {
     return isConfirmed ? true : false;
   };
 
-  const handleSendMessage = async () => {
+  const handleBookFromPicker = (day, time) => {
+    // Strip the date portion, keep just the weekday name for the booking message
+    const dayName = day.split(',')[0].trim();
+    setInputValue(`Book ${dayName} at ${time}`);
+    // Remove the picker from the message that spawned it
+    setChatHistory(prev => prev.map(msg =>
+      msg.available_slots ? { ...msg, available_slots: null } : msg
+    ));
+    // Use setTimeout to let state settle before sending
+    setTimeout(() => handleSendMessage(`Book ${dayName} at ${time}`), 50);
+  };
+
+  const handleSendMessage = async (overrideMessage) => {
     // Prevent API calls if locked 
     if (isEmergencyLock) return;
 
-    const messageToSend = inputValue.trim();
+    const messageToSend = (overrideMessage || inputValue).trim();
     if (!messageToSend) return;
 
     // Filter out welcome message from history for API
@@ -401,8 +450,10 @@ function App() {
         sender: 'agent', 
         text: data.response,
         hasBooking: !!bookingInfo,
-        source: data.source 
+        source: data.source,
+        available_slots: data.available_slots || null
       };
+
       setChatHistory(prev => [...prev, newAgentMessage]);
 
     } catch (error) {
@@ -506,9 +557,17 @@ function App() {
               {/* Wrapper to stack the bubble and the source card */}
               <div className="message-content-wrapper">
                 <div className="message-bubble">
-                  {msg.text}
+                  {msg.sender === 'user' ? msg.text : <ReactMarkdown>{msg.text}</ReactMarkdown>}
                 </div>
                 
+                {/* Inline Appointment Picker */}
+                {msg.available_slots && (
+                  <AppointmentPicker
+                    slots={msg.available_slots}
+                    onBook={handleBookFromPicker}
+                  />
+                )}
+
                 {/* NEW: Inline Medical Source Card */}
                 {msg.source && (
                   <div className="inline-medical-source">
