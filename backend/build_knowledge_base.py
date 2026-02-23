@@ -263,8 +263,8 @@ def get_sample_data() -> List[Dict]:
             "condition_name": "Shingles",
             "search_chunk": "Condition: Shingles. Overview: Shingles is an infection that causes a painful rash. Symptoms: Painful, red, blistery rash on your arm, body, or face, tingling or burning feeling, headache, feeling generally unwell.",
             "symptoms": "Painful, red, blistery rash on your arm, body, or face, tingling or burning feeling, headache, feeling generally unwell",
-            "triage_advice": "GP",
-            "source_explanation": "See a GP if you suspect shingles. You need medicine within 3 days of the rash appearing to help prevent long-lasting pain.",
+            "triage_advice": "Pharmacist (if 18 or over) or GP (if under 18)",
+            "source_explanation": "If you are 18 or over, a pharmacist can help with shingles. If you are under 18, you should see a GP. You need treatment within 3 days of the rash appearing.",
             "source_url": "https://www.nhs.uk/conditions/shingles/"
         },
         {
