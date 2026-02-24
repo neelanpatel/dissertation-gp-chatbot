@@ -969,6 +969,15 @@ function App() {
               Based on the symptoms described, this automated assistant has been locked for your safety. Please seek human medical advice immediately.
             </p>
             
+            <div className="emergency-999-banner">
+              <span className="emergency-999-number">999</span>
+              <p className="emergency-999-text">Call 999 immediately if you are experiencing a medical emergency. Do not wait.</p>
+            </div>
+
+            <p className="emergency-secondary-label">
+              If you are certain this is not a critical emergency, you can also seek advice through:
+            </p>
+
             <div className="emergency-options-grid">
               <div className="emergency-option-card nhs-111">
                 <h4>📞 NHS 111</h4>
@@ -984,10 +993,6 @@ function App() {
                 </p>
               </div>
             </div>
-
-            <p className="emergency-warning-text">
-              If this is a life-threatening emergency, please call <strong>999</strong> immediately.
-            </p>
             
             <button
               className="emergency-reset-btn"

@@ -94,5 +94,21 @@
     "triage_advice": "Dentist",
     "source_explanation": "A GP cannot provide dental treatment. You must see a dentist if you have a toothache that lasts more than 2 days.",
     "source_url": "https://www.nhs.uk/conditions/toothache/"
+  },
+  {
+    "condition_name": "Hay Fever",
+    "search_chunk": "Condition: Hay Fever. Overview: Hay fever is an allergic reaction to pollen. Symptoms: Sneezing, runny or blocked nose, itchy red or watery eyes, itchy throat, mouth, nose and ears, loss of smell, headache.",
+    "symptoms": "Sneezing, runny or blocked nose, itchy red or watery eyes, itchy throat, mouth, nose and ears, loss of smell, headache",
+    "triage_advice": "Pharmacist",
+    "source_explanation": "A pharmacist can give advice and suggest the best treatments, such as antihistamine drops, tablets or nasal sprays.",
+    "source_url": "https://www.nhs.uk/conditions/hay-fever/"
+  },
+  {
+    "condition_name": "Urinary Tract Infection",
+    "search_chunk": "Condition: Urinary Tract Infection. Overview: A UTI is an infection in the urinary system. Symptoms: Pain or burning when urinating, needing to urinate more often than usual, dark, cloudy or strong-smelling urine, pain in the lower tummy, feeling tired and unwell.",
+    "symptoms": "Pain or burning when urinating, needing to urinate more often than usual, dark cloudy or strong-smelling urine, pain in the lower tummy, feeling tired and unwell",
+    "triage_advice": "GP",
+    "source_explanation": "See a GP if you think you have a UTI. A GP can prescribe antibiotics to treat the infection.",
+    "source_url": "https://www.nhs.uk/conditions/urinary-tract-infections-utis/"
   }
 ]

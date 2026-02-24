@@ -452,6 +452,40 @@ body {
   color: #4A5568;
 }
 
+.emergency-999-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #E53E3E;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.emergency-999-number {
+  font-size: 2.8rem;
+  font-weight: 900;
+  color: white;
+  letter-spacing: 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.emergency-999-text {
+  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.emergency-secondary-label {
+  font-size: 0.85rem;
+  color: #718096;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
 .emergency-warning-text {
   font-size: 0.85rem;
   color: #718096;
