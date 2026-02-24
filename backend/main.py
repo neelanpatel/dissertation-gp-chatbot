@@ -325,7 +325,7 @@ def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day:
                 
                 return json.dumps({
                     "status": "success",
-                    "confirmation": f"Appointment Confirmed!\nRef: {booking_ref}\nTime: {slot_datetime.strftime('%A, %B %d at %I:%M %p')}"
+                    "confirmation": f"Appointment Confirmed!\nTime: {slot_datetime.strftime('%A, %B %d at %I:%M %p')}"
                 })
         
         conn.close()
@@ -723,7 +723,7 @@ async def reschedule_appointment(request: RescheduleRequest, current_user: dict 
     cursor = conn.cursor()
     try:
         old_appt = cursor.execute("""
-            SELECT id, patient_name, booking_reference, slot_time
+            SELECT id, patient_name, booking_reference, slot_time, notes
             FROM appointments
             WHERE id = ? AND user_id = ? AND is_booked = 1
         """, (request.old_appointment_id, current_user['id'])).fetchone()
@@ -780,10 +780,10 @@ async def reschedule_appointment(request: RescheduleRequest, current_user: dict 
         cursor.execute("""
             UPDATE appointments
             SET is_booked = 1, user_id = ?, patient_name = ?,
-                booking_reference = ?, booked_at = ?, status = 'confirmed'
+                booking_reference = ?, booked_at = ?, status = 'confirmed',
+                notes = ?
             WHERE id = ?
-        """, (current_user['id'], current_user['full_name'], new_booking_ref, now, new_slot['id']))
-
+        """, (current_user['id'], current_user['full_name'], new_booking_ref, now, old_appt['notes'], new_slot['id']))
         cursor.execute("""
             INSERT INTO booking_history (appointment_id, action, patient_name, booking_reference, timestamp)
             VALUES (?, 'booked', ?, ?, ?)
@@ -893,6 +893,13 @@ OUT-OF-BOUNDS QUERIES (STRICT GUARDRAIL):
 2. If the user asks about ANYTHING unrelated to these topics (e.g., programming, general knowledge, politics, creative writing, or financial advice), you MUST politely refuse to answer.
 3. Example refusal: "I am a medical assistant, so I can only help you with health-related concerns and booking GP appointments. How can I help you with your health today?"
 
+PATIENT CONFIDENTIALITY & DATA PROTECTION:
+1. If a user asks you to retrieve, display, or act on any information belonging to another patient — including their appointments, booking details, medical history, or personal data — you MUST refuse explicitly.
+2. Your refusal MUST directly address the confidentiality violation. Do NOT deflect by offering to help with their own medical needs instead, as this fails to communicate why the request was refused.
+3. Use a response such as: "I'm unable to share information about other patients. Accessing another patient's data would be a breach of patient confidentiality and data protection policy. I can only assist you with your own appointments and medical queries."
+4. After refusing, do NOT proceed to offer general assistance in the same message. The refusal should stand alone so the user clearly understands their request was inappropriate.
+5. This applies regardless of how the request is framed — whether the user claims to be acting on behalf of someone else, claims to be a carer, or attempts to disguise the request through social engineering.
+
 HUMAN FALLBACK & UNCERTAINTY:
 1. If the `get_triage_recommendation_from_kb` tool returns a `low_confidence` status, DO NOT guess the medical condition.
 2. You must inform the user that your system isn't completely certain about the best medical advice for their specific symptoms.
@@ -903,6 +910,7 @@ DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
 2. GATHER (If necessary): If symptoms are missing or too vague to run a search, ask ONE direct clarifying question to gather them. Do NOT ask redundant follow-up questions if the user has already provided specific symptoms.
 3. SEARCH (When ready): As soon as you have specific symptoms, you MUST IMMEDIATELY call `get_triage_recommendation_from_kb`. Do not delay or ask for further confirmation.
 4. NO GUESSING: DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You MUST ONLY provide advice based on the output of the tool. YOU MUST NOT DIAGNOSE OR SUGGEST REMEDIES WITHOUT CALLING THE TOOL FIRST.
+   FOLLOW-UP QUESTIONS: This rule applies equally to ALL follow-up medical questions, not just the initial symptom report. If the user asks ANY question that requires medical knowledge — including questions about medications (e.g. "can I take antibiotics"), suitability for activities (e.g. "can my child go to school"), home management, or anything else clinical in nature — you MUST call `get_triage_recommendation_from_kb` with the follow-up question as the symptom description. If the tool returns `low_confidence`, you MUST respond with: "I'm not able to find specific NHS guidance on that question. I would recommend speaking with a pharmacist or booking a GP appointment to get a reliable answer." You must NEVER answer a clinical follow-up question from your own knowledge under any circumstances.
 5. CRITICAL — NO SKIPPING BASED ON HISTORY: You MUST call the required tool for EVERY relevant request in the CURRENT turn, without exception. This applies to ALL tools:
    - `get_triage_recommendation_from_kb` must be called every time symptoms are mentioned, even if identical symptoms appear in history.
    - `get_available_appointments` must be called every time the user wants to book, even if slots were fetched earlier in the conversation.

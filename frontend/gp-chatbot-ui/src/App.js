@@ -700,7 +700,7 @@ function App() {
     // Prevent API calls if locked 
     if (isEmergencyLock) return;
 
-    const messageToSend = (overrideMessage || inputValue).trim();
+    const messageToSend = (typeof overrideMessage === 'string' ? overrideMessage : inputValue).trim();
     if (!messageToSend) return;
 
     // Filter out welcome message from history for API
