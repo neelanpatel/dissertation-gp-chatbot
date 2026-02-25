@@ -155,294 +155,233 @@ function ForgotPasswordForm({ onBack }) {
     </div>
   );
 }
-// UK Address Autocomplete using OpenStreetMap Nominatim (free, no API key)
+
+// UK Address Lookup — postcode validation + structured entry
 function AddressLookup({ onAddressSelect, initialValue = '' }) {
-  const [query, setQuery] = React.useState('');
-  const [suggestions, setSuggestions] = React.useState([]);
+  const [postcode, setPostcode] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [selectedAddress, setSelectedAddress] = React.useState(initialValue || '');
-  const [manualMode, setManualMode] = React.useState(false);
-  const [houseNumber, setHouseNumber] = React.useState('');
-  const [needsHouseNumber, setNeedsHouseNumber] = React.useState(false);
-  const [baseAddress, setBaseAddress] = React.useState('');
-  const [manualFields, setManualFields] = React.useState({ line1: '', line2: '', city: '', county: '', postcode: '' });
-  const [highlightedIndex, setHighlightedIndex] = React.useState(-1);
-  const wrapperRef = React.useRef(null);
-  const debounceRef = React.useRef(null);
-  
-  // Format a Nominatim result into a clean UK address string (WITHOUT house number)
-  const formatAddress = (place) => {
-    const addr = place.address || {};
-    const parts = [];
-    // Road only (house number handled separately)
-    if (addr.road) parts.push(addr.road);
-    const locality = addr.village || addr.suburb || addr.neighbourhood || addr.hamlet || '';
-    if (locality && locality !== (addr.city || addr.town)) parts.push(locality);
-    const city = addr.city || addr.town || addr.county || '';
-    if (city) parts.push(city);
-    if (addr.county && addr.county !== city) parts.push(addr.county);
-    if (addr.postcode) parts.push(addr.postcode);
-    return parts.join(', ');
-  };
+  const [error, setError] = React.useState('');
+  const [step, setStep] = React.useState('postcode'); // postcode | details | manual
+  const [areaInfo, setAreaInfo] = React.useState(null);
+  const [details, setDetails] = React.useState({ flatUnit: '', houseName: '', houseNumber: '', street: '' });
 
-  // Debounced search against Nominatim
-  const searchAddresses = React.useCallback((searchQuery) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    const trimmed = searchQuery.trim();
-    if (trimmed.length < 3) {
-      setSuggestions([]);
-      setIsOpen(false);
-      return;
-    }
-
-    debounceRef.current = setTimeout(async () => {
-      setIsLoading(true);
-      try {
-        const encoded = encodeURIComponent(trimmed);
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encoded}&countrycodes=gb&format=json&addressdetails=1&limit=6`,
-          { headers: { 'Accept': 'application/json' } }
-        );
-        const data = await response.json();
-        // Filter to results that have meaningful address detail
-        const filtered = data.filter(place => {
-          const addr = place.address || {};
-          return addr.postcode || addr.road || addr.city || addr.town;
-        });
-        setSuggestions(filtered);
-        setIsOpen(filtered.length > 0);
-        setHighlightedIndex(-1);
-      } catch (e) {
-        setSuggestions([]);
-        setIsOpen(false);
-      } finally {
+  // Validate postcode via postcodes.io
+  const handleLookup = async () => {
+    const cleaned = postcode.trim().toUpperCase().replace(/\s+/g, ' ');
+    if (!cleaned) { setError('Please enter a postcode.'); return; }
+    setError('');
+    setIsLoading(true);
+    try {
+      const res = await fetch(`https://api.postcodes.io/postcodes/${cleaned.replace(/\s/g, '')}`);
+      const data = await res.json();
+      if (data.status !== 200) {
+        setError('Postcode not found. Please check and try again.');
         setIsLoading(false);
+        return;
       }
-    }, 400); // 400ms debounce respects Nominatim rate limits
+      const r = data.result;
+      setAreaInfo({
+        postcode: r.postcode,
+        town: r.admin_district || r.parish || '',
+        county: r.admin_county || r.region || '',
+      });
+      setPostcode(r.postcode);
+      setStep('details');
+    } catch (e) {
+      setError('Could not reach the postcode service. Please enter your address manually.');
+      setStep('manual');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Build full address string from parts
+  const buildAddress = React.useCallback((d, area) => {
+    if (!area) return '';
+    const line1Parts = [d.flatUnit, d.houseNumber, d.houseName].filter(Boolean);
+    const line1 = line1Parts.join(', ');
+    const parts = [line1, d.street, area.town, area.county, area.postcode].filter(Boolean);
+    return parts.join(', ');
   }, []);
 
-  // Handle typing in the search input
-  const handleInputChange = (e) => {
-    const value = e.target.value;
-    setQuery(value);
-    setSelectedAddress('');
-    onAddressSelect('');
-    searchAddresses(value);
-  };
-
-  // Handle selecting a suggestion
-  const handleSelect = (place) => {
-    const addr = place.address || {};
-    const formatted = formatAddress(place);
-    const existingNumber = addr.house_number || '';
-
-    setHouseNumber(existingNumber);
-    setBaseAddress(formatted);
-    setQuery(existingNumber ? `${existingNumber} ${formatted}` : formatted);
-    setSuggestions([]);
-    setIsOpen(false);
-    setHighlightedIndex(-1);
-    setNeedsHouseNumber(true);
-
-    if (existingNumber) {
-      setSelectedAddress(`${existingNumber} ${formatted}`);
-      onAddressSelect(`${existingNumber} ${formatted}`);
-    } else {
-      setSelectedAddress('');
-      onAddressSelect('');
-    }
-  };
-
-  // Keyboard navigation
-  const handleKeyDown = (e) => {
-    if (!isOpen || suggestions.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
-    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
-      e.preventDefault();
-      handleSelect(suggestions[highlightedIndex]);
-    } else if (e.key === 'Escape') {
-      setIsOpen(false);
-      setHighlightedIndex(-1);
-    }
-  };
-
-  // Close dropdown when clicking outside
+  // Sync details → parent whenever they change
   React.useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setIsOpen(false);
-        setHighlightedIndex(-1);
+    if (step === 'details' && areaInfo) {
+      const d = details;
+      if ((d.houseNumber || d.houseName) && d.street) {
+        onAddressSelect(buildAddress(d, areaInfo));
+      } else {
+        onAddressSelect('');
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [details, step, areaInfo]);
 
   // Sync manual fields → parent
+  const [manualFields, setManualFields] = React.useState({
+    flatUnit: '', houseNumber: '', houseName: '', street: '', city: '', county: '', postcode: ''
+  });
+
   React.useEffect(() => {
-    if (manualMode) {
-      const { line1, line2, city, county, postcode } = manualFields;
-      if (line1 && city && postcode) {
-        const parts = [line1, line2, city, county, postcode].filter(Boolean);
+    if (step === 'manual') {
+      const f = manualFields;
+      if ((f.houseNumber || f.houseName) && f.street && f.city && f.postcode) {
+        const line1Parts = [f.flatUnit, f.houseNumber, f.houseName].filter(Boolean);
+        const parts = [line1Parts.join(', '), f.street, f.city, f.county, f.postcode].filter(Boolean);
         onAddressSelect(parts.join(', '));
       } else {
         onAddressSelect('');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manualFields, manualMode]);
+  }, [manualFields, step]);
 
-  // Clean up debounce on unmount
-  React.useEffect(() => {
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, []);
-
-  return (
-    <div className="address-lookup-wrapper" ref={wrapperRef}>
-      <label className="address-lookup-label">Address</label>
-
-      {!manualMode ? (
-        <>
-          <div className="address-autocomplete-container">
-            <div className="address-input-row">
-              <svg className="address-search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input
-                type="text"
-                placeholder="Start typing your address or postcode..."
-                value={query}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
-                className="address-autocomplete-input"
-                autoComplete="off"
-                role="combobox"
-                aria-expanded={isOpen}
-                aria-autocomplete="list"
-                aria-controls="address-suggestions-list"
-              />
-              {isLoading && <div className="address-spinner" />}
-              {selectedAddress && !isLoading && (
-                <svg className="address-check-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38B2AC" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              )}
-            </div>
-
-            {isOpen && suggestions.length > 0 && (
-              <ul className="address-suggestions-list" id="address-suggestions-list" role="listbox">
-                {suggestions.map((place, index) => {
-                  const formatted = formatAddress(place);
-                  return (
-                    <li
-                      key={place.place_id}
-                      role="option"
-                      aria-selected={highlightedIndex === index}
-                      className={`address-suggestion-item ${highlightedIndex === index ? 'highlighted' : ''}`}
-                      onClick={() => handleSelect(place)}
-                      onMouseEnter={() => setHighlightedIndex(index)}
-                    >
-                      <svg className="address-pin-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                      </svg>
-                      <span>{formatted}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          
-          {needsHouseNumber && (
-            <div className="address-house-number-row">
-              <input
-                type="text"
-                placeholder="House/flat number or name *"
-                value={houseNumber}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setHouseNumber(val);
-                  if (val.trim() && baseAddress) {
-                    const full = `${val.trim()} ${baseAddress}`;
-                    setSelectedAddress(full);
-                    setQuery(full);
-                    onAddressSelect(full);
-                  } else {
-                    setSelectedAddress('');
-                    onAddressSelect('');
-                  }
-                }}
-                className="address-house-number-input"
-                autoFocus
-              />
-              <span className="address-house-number-hint">
-                {baseAddress}
+  // Postcode entry 
+  if (step === 'postcode') {
+    return (
+      <div className="address-lookup-wrapper">
+        <label className="address-lookup-label">Address</label>
+        <div className="address-postcode-row">
+          <input
+            placeholder="Enter your postcode"
+            value={postcode}
+            onChange={e => { setPostcode(e.target.value.toUpperCase()); setError(''); }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleLookup(); } }}
+            className="address-postcode-input"
+          />
+          <button type="button" className="address-lookup-btn" onClick={handleLookup} disabled={isLoading}>
+            {isLoading ? (
+              <span className="address-btn-loading">
+                <span className="address-spinner-inline" /> Checking...
               </span>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="address-manual-toggle"
-            onClick={() => setManualMode(true)}
-          >
-            Can't find your address? Enter it manually
-          </button>
-        </>
-      ) : (
-        <div className="address-fields">
-          <input
-            placeholder="Address line 1 (e.g. 10 Downing Street) *"
-            value={manualFields.line1}
-            onChange={e => setManualFields({ ...manualFields, line1: e.target.value })}
-            required
-          />
-          <input
-            placeholder="Address line 2 (optional)"
-            value={manualFields.line2}
-            onChange={e => setManualFields({ ...manualFields, line2: e.target.value })}
-          />
-          <div className="address-fields-row">
-            <input
-              placeholder="City / Town *"
-              value={manualFields.city}
-              onChange={e => setManualFields({ ...manualFields, city: e.target.value })}
-              required
-            />
-            <input
-              placeholder="County"
-              value={manualFields.county}
-              onChange={e => setManualFields({ ...manualFields, county: e.target.value })}
-            />
-          </div>
-          <input
-            placeholder="Postcode *"
-            value={manualFields.postcode}
-            onChange={e => setManualFields({ ...manualFields, postcode: e.target.value.toUpperCase() })}
-            className="address-postcode-manual"
-            required
-          />
-          <button
-            type="button"
-            className="address-manual-toggle"
-            onClick={() => { setManualMode(false); setManualFields({ line1: '', line2: '', city: '', county: '', postcode: '' }); }}
-          >
-            ← Back to address search
+            ) : 'Find Address'}
           </button>
         </div>
-      )}
+        {error && <div className="address-lookup-error">{error}</div>}
+        <button type="button" className="address-manual-toggle" onClick={() => setStep('manual')}>
+          Or enter your full address manually
+        </button>
+      </div>
+    );
+  }
+
+  // Postcode confirmed — enter address details
+  if (step === 'details' && areaInfo) {
+    return (
+      <div className="address-lookup-wrapper">
+        <label className="address-lookup-label">Address</label>
+
+        <div className="address-postcode-confirmed">
+          <div className="address-postcode-confirmed-left">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38B2AC" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span className="address-pc-value">{areaInfo.postcode}</span>
+            <span className="address-pc-area">{[areaInfo.town, areaInfo.county].filter(Boolean).join(', ')}</span>
+          </div>
+          <button type="button" className="address-change-link" onClick={() => { setStep('postcode'); setDetails({ flatUnit: '', houseName: '', houseNumber: '', street: '' }); onAddressSelect(''); }}>
+            Change
+          </button>
+        </div>
+
+        <div className="address-details-fields">
+          <input
+            placeholder="House / building number *"
+            value={details.houseNumber}
+            onChange={e => setDetails({ ...details, houseNumber: e.target.value })}
+            className="address-detail-input"
+            autoFocus
+          />
+          <input
+            placeholder="Building name (optional, e.g. Rose Cottage)"
+            value={details.houseName}
+            onChange={e => setDetails({ ...details, houseName: e.target.value })}
+            className="address-detail-input"
+          />
+          <input
+            placeholder="Street name *"
+            value={details.street}
+            onChange={e => setDetails({ ...details, street: e.target.value })}
+            className="address-detail-input"
+          />
+          <input
+            placeholder="Flat / apartment / unit (optional, e.g. Flat 4B)"
+            value={details.flatUnit}
+            onChange={e => setDetails({ ...details, flatUnit: e.target.value })}
+            className="address-detail-input"
+          />
+        </div>
+
+        {(details.houseNumber || details.houseName) && details.street && (
+          <div className="address-preview">
+            {buildAddress(details, areaInfo)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Full manual entry 
+  return (
+    <div className="address-lookup-wrapper">
+      <label className="address-lookup-label">Address</label>
+      <div className="address-details-fields">
+        <input
+          placeholder="House / building number *"
+          value={manualFields.houseNumber}
+          onChange={e => setManualFields({ ...manualFields, houseNumber: e.target.value })}
+          className="address-detail-input"
+        />
+        <input
+          placeholder="Building name (optional)"
+          value={manualFields.houseName}
+          onChange={e => setManualFields({ ...manualFields, houseName: e.target.value })}
+          className="address-detail-input"
+        />
+        <input
+          placeholder="Street name *"
+          value={manualFields.street}
+          onChange={e => setManualFields({ ...manualFields, street: e.target.value })}
+          className="address-detail-input"
+        />
+        <input
+          placeholder="Flat / apartment / unit (optional)"
+          value={manualFields.flatUnit}
+          onChange={e => setManualFields({ ...manualFields, flatUnit: e.target.value })}
+          className="address-detail-input"
+        />
+        <div className="address-fields-row">
+          <input
+            placeholder="City / Town *"
+            value={manualFields.city}
+            onChange={e => setManualFields({ ...manualFields, city: e.target.value })}
+            className="address-detail-input"
+          />
+          <input
+            placeholder="County"
+            value={manualFields.county}
+            onChange={e => setManualFields({ ...manualFields, county: e.target.value })}
+            className="address-detail-input"
+          />
+        </div>
+        <input
+          placeholder="Postcode *"
+          value={manualFields.postcode}
+          onChange={e => setManualFields({ ...manualFields, postcode: e.target.value.toUpperCase() })}
+          className="address-detail-input address-postcode-manual"
+        />
+        <button type="button" className="address-manual-toggle" onClick={() => {
+          setStep('postcode');
+          setManualFields({ flatUnit: '', houseNumber: '', houseName: '', street: '', city: '', county: '', postcode: '' });
+          onAddressSelect('');
+        }}>
+          ← Back to postcode lookup
+        </button>
+      </div>
     </div>
   );
 }
+
 // Login form for existing patients
 function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }) {
   const [username, setUsername] = useState('');

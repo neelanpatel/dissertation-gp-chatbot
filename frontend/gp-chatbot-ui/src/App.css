@@ -47,6 +47,8 @@ body {
   text-align: center;
   position: relative;
   overflow: hidden;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .auth-container::before {
@@ -1085,12 +1087,12 @@ body {
   color: var(--primary-teal);
 }
 
-/* Address Lookup */
+
+/* ── Address Lookup ── */
 .address-lookup-wrapper {
   width: 100%;
   margin-bottom: 16px;
   text-align: left;
-  position: relative;
 }
 
 .address-lookup-label {
@@ -1101,58 +1103,57 @@ body {
   margin-bottom: 8px;
 }
 
-/* Autocomplete container */
-.address-autocomplete-container {
-  position: relative;
-  width: 100%;
+/* Step 1: Postcode row */
+.address-postcode-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 4px;
 }
 
-.address-input-row {
-  position: relative;
+.address-postcode-input {
+  flex: 1;
+  padding: 16px 20px !important;
+  margin-bottom: 0 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.address-lookup-btn {
+  background: var(--primary-teal);
+  color: white;
+  border: none;
+  padding: 16px 22px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.address-lookup-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+}
+
+.address-lookup-btn:disabled {
+  background: #CBD5E0;
+  cursor: not-allowed;
+}
+
+.address-btn-loading {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
-.address-search-icon {
-  position: absolute;
-  left: 16px;
-  color: #A0AEC0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.address-autocomplete-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 16px 44px 16px 42px !important;
-  background: var(--bg-sage-grey);
-  border: 2px solid transparent;
-  border-radius: 16px;
-  font-size: 15px;
-  color: var(--text-dark);
-  transition: all 0.2s ease;
-  margin-bottom: 0 !important;
-}
-
-.address-autocomplete-input:focus {
-  background: var(--white);
-  border-color: var(--primary-teal);
-  outline: none;
-  box-shadow: 0 0 0 4px rgba(15, 76, 92, 0.1);
-}
-
-.address-autocomplete-input::placeholder {
-  color: #A0AEC0;
-}
-
-/* Loading spinner */
-.address-spinner {
-  position: absolute;
-  right: 14px;
-  width: 18px;
-  height: 18px;
-  border: 2.5px solid #E2E8F0;
-  border-top-color: var(--primary-teal);
+.address-spinner-inline {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
   border-radius: 50%;
   animation: addressSpin 0.6s linear infinite;
 }
@@ -1161,101 +1162,71 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Checkmark icon for selected address */
-.address-check-icon {
-  position: absolute;
-  right: 14px;
+.address-lookup-error {
+  color: #E53E3E;
+  font-size: 0.82rem;
+  margin-top: 6px;
+  margin-bottom: 4px;
+  font-weight: 500;
 }
 
-/* Suggestions dropdown */
-.address-suggestions-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #E2E8F0;
-  border-radius: 14px;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 8px -2px rgba(0, 0, 0, 0.06);
-  list-style: none;
-  margin: 0;
-  padding: 6px;
-  z-index: 50;
-  max-height: 260px;
-  overflow-y: auto;
-  animation: addressDropIn 0.15s ease-out;
-}
-
-@keyframes addressDropIn {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.address-suggestion-item {
+/* Step 2: Confirmed postcode bar */
+.address-postcode-confirmed {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(56, 178, 172, 0.06);
+  border: 1.5px solid rgba(56, 178, 172, 0.2);
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 12px;
   gap: 10px;
-  padding: 12px 14px;
-  cursor: pointer;
-  border-radius: 10px;
-  font-size: 0.88rem;
-  line-height: 1.4;
+}
+
+.address-postcode-confirmed-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.address-pc-value {
+  font-weight: 700;
+  font-size: 0.95rem;
   color: var(--text-dark);
-  transition: background 0.12s ease;
+  letter-spacing: 0.3px;
 }
 
-.address-suggestion-item:hover,
-.address-suggestion-item.highlighted {
-  background: var(--bg-sage-grey);
+.address-pc-area {
+  font-size: 0.84rem;
+  color: #718096;
 }
 
-.address-suggestion-item.highlighted {
-  background: rgba(15, 76, 92, 0.08);
-}
-
-.address-pin-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--primary-teal);
-}
-
-.address-suggestion-item span {
-  flex: 1;
-}
-
-/* Manual entry toggle */
-.address-manual-toggle {
+.address-change-link {
   background: none;
   border: none;
   color: var(--primary-teal);
+  font-weight: 600;
   font-size: 0.82rem;
-  font-weight: 500;
   cursor: pointer;
-  padding: 6px 0;
-  margin-top: 6px;
-  transition: color 0.2s;
+  padding: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.address-manual-toggle:hover {
-  color: var(--primary-light);
+.address-change-link:hover {
   text-decoration: underline;
 }
 
-/* Manual entry fields */
-.address-fields {
+/* Detail entry fields */
+.address-details-fields {
   display: flex;
   flex-direction: column;
   gap: 10px;
   animation: slideUp 0.3s ease;
 }
 
-.address-fields input {
+.address-detail-input {
   width: 100%;
   box-sizing: border-box;
   padding: 14px 18px;
@@ -1268,13 +1239,26 @@ body {
   margin-bottom: 0;
 }
 
-.address-fields input:focus {
+.address-detail-input:focus {
   background: var(--white);
   border-color: var(--primary-teal);
   outline: none;
   box-shadow: 0 0 0 4px rgba(15, 76, 92, 0.1);
 }
 
+/* Live preview */
+.address-preview {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--bg-sage-grey);
+  border-radius: 10px;
+  font-size: 0.84rem;
+  color: #4A5568;
+  line-height: 1.4;
+  border-left: 3px solid var(--primary-teal);
+}
+
+/* Row layout for city/county */
 .address-fields-row {
   display: flex;
   gap: 10px;
@@ -1290,36 +1274,20 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* House number input after selection */
-.address-house-number-row {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  animation: addressDropIn 0.2s ease-out;
+/* Manual toggle */
+.address-manual-toggle {
+  background: none;
+  border: none;
+  color: var(--primary-teal);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 0;
+  margin-top: 6px;
+  transition: color 0.2s;
 }
 
-.address-house-number-input {
-  width: 100%;
-  max-width: 280px;
-  box-sizing: border-box;
-  padding: 14px 18px;
-  background: var(--bg-sage-grey);
-  border: 2px solid var(--primary-teal);
-  border-radius: 12px;
-  font-size: 15px;
-  color: var(--text-dark);
-  transition: all 0.2s ease;
-}
-
-.address-house-number-input:focus {
-  background: var(--white);
-  outline: none;
-  box-shadow: 0 0 0 4px rgba(15, 76, 92, 0.1);
-}
-
-.address-house-number-hint {
-  font-size: 0.8rem;
-  color: #718096;
-  padding-left: 4px;
+.address-manual-toggle:hover {
+  color: var(--primary-light);
+  text-decoration: underline;
 }
