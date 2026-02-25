@@ -1291,3 +1291,69 @@ body {
   color: var(--primary-light);
   text-decoration: underline;
 }
+
+/* ── General Advisory Source Card (non-NHS) ── */
+.inline-general-source {
+  margin-top: 10px;
+  border: 1.5px solid #E8A317;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #FFFDF5;
+  max-width: 420px;
+  animation: slideUp 0.3s ease;
+}
+
+.inline-general-header {
+  background: linear-gradient(135deg, #F6AD55, #E8A317);
+  color: white;
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.general-warning-icon {
+  font-size: 1rem;
+}
+
+.inline-general-warning {
+  padding: 10px 16px;
+  background: #FFF8E7;
+  font-size: 0.78rem;
+  color: #8B6914;
+  line-height: 1.4;
+  border-bottom: 1px solid #F0E0B0;
+}
+
+.inline-general-body {
+  padding: 12px 16px;
+}
+
+.inline-general-body strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #744210;
+  margin-bottom: 6px;
+}
+
+.inline-general-body p {
+  font-size: 0.82rem;
+  color: #5A4A28;
+  line-height: 1.5;
+  margin: 0 0 10px 0;
+}
+
+.inline-general-body a {
+  color: #B7791F;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.inline-general-body a:hover {
+  color: #975A16;
+  text-decoration: underline;
+}

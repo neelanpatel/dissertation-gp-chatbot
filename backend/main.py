@@ -445,6 +445,114 @@ def get_triage_recommendation_from_kb(symptom_description: str):
         return json.dumps({"status": "found", "context": relevant_chunks})
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)})
+    
+def get_general_medical_advisory(symptom_description: str) -> Optional[dict]:
+    """
+    Multi-Agent Advisory Pipeline (triggered ONLY on RAG low_confidence):
+    
+    Agent 1 (Advisory): Generates general medical advice from LLM knowledge,
+                        citing a specific, verifiable medical source URL.
+    Agent 2 (Verifier): Cross-checks the advice and source for legitimacy,
+                        rejecting hallucinated or unreliable sources.
+    
+    Returns a dict with advice, source_name, source_url, and condition — or None if rejected.
+    """
+    try:
+        # ── AGENT 1: Advisory Agent ──
+        advisory_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a medical information assistant. Given a symptom description, provide:
+1. A brief, helpful piece of general health advice (2-3 sentences max).
+2. A SPECIFIC source URL from a trusted medical website (Mayo Clinic, Cleveland Clinic, NHS.uk, WHO, or BMJ).
+
+CRITICAL RULES:
+- ONLY cite sources you are highly confident exist. Use well-known condition pages.
+- Prefer URLs in the format: https://www.mayoclinic.org/diseases-conditions/[condition]/symptoms-causes/syc-[id]
+  or https://www.nhs.uk/conditions/[condition]/
+  or https://www.who.int/news-room/fact-sheets/detail/[condition]
+- Do NOT invent or guess URLs. If unsure, use a general trusted page.
+- Do NOT diagnose. Use phrases like "This could be related to..." or "Common causes include..."
+- Keep advice general and safe. Always recommend seeing a healthcare professional.
+
+Respond in EXACTLY this JSON format and nothing else:
+{
+  "advice": "Your general advice here.",
+  "source_name": "Mayo Clinic",
+  "source_url": "https://www.mayoclinic.org/...",
+  "condition_topic": "Brief topic name"
+}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Symptoms: {symptom_description}"
+                }
+            ],
+            temperature=0.2,
+        )
+
+        advisory_raw = advisory_response.choices[0].message.content.strip()
+        # Clean markdown fences if present
+        advisory_raw = advisory_raw.replace("```json", "").replace("```", "").strip()
+        advisory_data = json.loads(advisory_raw)
+
+        # Validate required fields exist
+        if not all(k in advisory_data for k in ["advice", "source_name", "source_url", "condition_topic"]):
+            print("Advisory agent returned incomplete data.")
+            return None
+
+        # ── AGENT 2: Verification Agent ──
+        verification_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a medical source verification agent. You will receive:
+- A piece of medical advice
+- A source name and URL
+- The original symptom description
+
+Your job is to verify:
+1. Is the source a REAL, trusted medical institution? (Mayo Clinic, Cleveland Clinic, NHS, WHO, BMJ, MedlinePlus, etc.)
+2. Is the URL plausible and well-formed for that institution? (correct domain, reasonable path structure)
+3. Is the advice safe, non-diagnostic, and generally aligned with mainstream medical guidance?
+4. Does the advice relate to the symptoms described?
+
+Respond in EXACTLY this JSON format and nothing else:
+{
+  "is_verified": true or false,
+  "rejection_reason": "null if verified, otherwise explain why"
+}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"""ADVICE: {advisory_data['advice']}
+SOURCE: {advisory_data['source_name']} — {advisory_data['source_url']}
+ORIGINAL SYMPTOMS: {symptom_description}"""
+                }
+            ],
+            temperature=0.0,
+        )
+
+        verify_raw = verification_response.choices[0].message.content.strip()
+        verify_raw = verify_raw.replace("```json", "").replace("```", "").strip()
+        verify_data = json.loads(verify_raw)
+
+        if not verify_data.get("is_verified"):
+            print(f"Verification agent REJECTED advisory: {verify_data.get('rejection_reason')}")
+            return None
+
+        print(f"✓ Advisory verified: {advisory_data['source_name']} — {advisory_data['source_url']}")
+        return advisory_data
+
+    except json.JSONDecodeError as e:
+        print(f"Advisory pipeline JSON parse error: {e}")
+        return None
+    except Exception as e:
+        print(f"Advisory pipeline error: {e}")
+        return None
 
 def get_user_bookings(user_id: int):
     """Returns the user's current bookings formatted for the cancellation picker."""
@@ -860,6 +968,14 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
     # Variables for cancellation and reschedule widgets
     cancellation_slots = None
     reschedule_data = None
+
+
+    medical_source = None
+    available_slots = None
+    cancellation_slots = None
+    reschedule_data = None
+
+    general_source = None
     
     # save the user's incoming message
     conn = get_db_connection()
@@ -902,8 +1018,10 @@ PATIENT CONFIDENTIALITY & DATA PROTECTION:
 
 HUMAN FALLBACK & UNCERTAINTY:
 1. If the `get_triage_recommendation_from_kb` tool returns a `low_confidence` status, DO NOT guess the medical condition.
-2. You must inform the user that your system isn't completely certain about the best medical advice for their specific symptoms.
-3. However, you MUST STILL offer to book a GP appointment for them so they can be evaluated safely by a clinician. (Note: If it sounds like a severe emergency, follow the red flag rules above instead).
+2. You must inform the user that your NHS knowledge base does not have specific guidance for their symptoms.
+3. IMPORTANT: After stating the above, add: "However, I did find some general medical information that may be helpful — please see the advisory below. Please note this is not NHS-verified guidance, so I would recommend verifying it with a healthcare professional."
+4. You MUST STILL offer to book a GP appointment for them so they can be evaluated safely by a clinician. (Note: If it sounds like a severe emergency, follow the red flag rules above instead).
+5. Do NOT include the advisory content in your text response — it will be displayed automatically in a separate card below your message.
 
 DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
 1. ASSESS THE INPUT: Read the user's message. Does it contain specific physical or mental symptoms (e.g., "sore throat, cough, back pain") or is it vague/missing (e.g., "I feel unwell", "I need an appointment")?
@@ -1138,6 +1256,22 @@ Be warm, professional, and concise."""
                                     "text": best_match.get("source_explanation", ""),
                                     "url": best_match.get("source_url", "")
                                 }
+                            elif triage_data.get("status") == "low_confidence":
+                                # Trigger the multi-agent advisory pipeline
+                                symptom_input = ""
+                                try:
+                                    symptom_input = json.loads(tool_call.function.arguments).get("symptom_description", "")
+                                except Exception:
+                                    pass
+                                if symptom_input:
+                                    advisory_result = get_general_medical_advisory(symptom_input)
+                                    if advisory_result:
+                                        general_source = {
+                                            "advice": advisory_result["advice"],
+                                            "source_name": advisory_result["source_name"],
+                                            "source_url": advisory_result["source_url"],
+                                            "condition_topic": advisory_result["condition_topic"]
+                                        }
                         except (json.JSONDecodeError, IndexError, KeyError):
                             pass
 
@@ -1160,6 +1294,7 @@ Be warm, professional, and concise."""
     
     # Convert the dictionary to a JSON string for SQLite storage
     source_json = json.dumps(medical_source) if medical_source else None
+    general_source_json = json.dumps(general_source) if general_source else None
     
     conn.execute(
         "INSERT INTO messages (user_id, role, content, timestamp, source) VALUES (?, ?, ?, ?, ?)",
@@ -1180,6 +1315,7 @@ Be warm, professional, and concise."""
         "response": agent_response,
         "status": "normal",
         "source": medical_source,
+        "general_source": general_source,
         "available_slots": available_slots,
         "cancellation_slots": cancellation_slots,
         "reschedule_data": reschedule_data

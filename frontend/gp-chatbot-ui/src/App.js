@@ -1045,6 +1045,7 @@ function App() {
         text: data.response,
         hasBooking: !!bookingInfo,
         source: data.source,
+        general_source: data.general_source || null,
         available_slots: data.available_slots || null,
         cancellation_slots: data.cancellation_slots || null,
         reschedule_data: data.reschedule_data || null
@@ -1204,6 +1205,24 @@ function App() {
                       <p>"{msg.source.text}"</p>
                       <a href={msg.source.url} target="_blank" rel="noopener noreferrer">
                         Read full guidance on NHS.uk →
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {msg.general_source && (
+                  <div className="inline-general-source">
+                    <div className="inline-general-header">
+                      <span className="general-warning-icon">⚠️</span> General Medical Information
+                    </div>
+                    <div className="inline-general-warning">
+                      This is <strong>not NHS-verified guidance</strong>. It is sourced from general medical knowledge and should be verified with a healthcare professional.
+                    </div>
+                    <div className="inline-general-body">
+                      <strong>{msg.general_source.condition_topic}</strong>
+                      <p>{msg.general_source.advice}</p>
+                      <a href={msg.general_source.source_url} target="_blank" rel="noopener noreferrer">
+                        Read more on {msg.general_source.source_name} →
                       </a>
                     </div>
                   </div>
