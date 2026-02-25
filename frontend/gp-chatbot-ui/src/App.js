@@ -4,7 +4,8 @@ import './App.css';
 
 
 function ForgotPasswordForm({ onBack }) {
-  const [step, setStep] = React.useState('verify'); // 'verify' or 'reset'
+  const [step, setStep] = React.useState('verify');
+  const [showPassword, setShowPassword] = React.useState(false);
   const [username, setUsername] = React.useState('');
   const [dob, setDob] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
@@ -109,20 +110,38 @@ function ForgotPasswordForm({ onBack }) {
             <p>Identity verified. Please enter your new password.</p>
             {error && <div style={{color:'#E53E3E', marginBottom:'15px', fontWeight:'500'}}>{error}</div>}
             <form onSubmit={handleReset}>
-              <input
-                type="password"
-                placeholder="New Password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Confirm New Password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                required
-              />
+              <div className="password-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="New Password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  required
+                />
+                <button type="button" className="password-toggle" onClick={() => setShowPassword(p => !p)}>
+                  {showPassword ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+                </button>
+              </div>
+              <div className="password-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
               <button type="submit" disabled={isLoading}>
                 {isLoading ? 'Resetting...' : 'Reset Password'}
               </button>
@@ -136,11 +155,300 @@ function ForgotPasswordForm({ onBack }) {
     </div>
   );
 }
+// UK Address Autocomplete using OpenStreetMap Nominatim (free, no API key)
+function AddressLookup({ onAddressSelect, initialValue = '' }) {
+  const [query, setQuery] = React.useState('');
+  const [suggestions, setSuggestions] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [selectedAddress, setSelectedAddress] = React.useState(initialValue || '');
+  const [manualMode, setManualMode] = React.useState(false);
+  const [houseNumber, setHouseNumber] = React.useState('');
+  const [needsHouseNumber, setNeedsHouseNumber] = React.useState(false);
+  const [baseAddress, setBaseAddress] = React.useState('');
+  const [manualFields, setManualFields] = React.useState({ line1: '', line2: '', city: '', county: '', postcode: '' });
+  const [highlightedIndex, setHighlightedIndex] = React.useState(-1);
+  const wrapperRef = React.useRef(null);
+  const debounceRef = React.useRef(null);
+  
+  // Format a Nominatim result into a clean UK address string (WITHOUT house number)
+  const formatAddress = (place) => {
+    const addr = place.address || {};
+    const parts = [];
+    // Road only (house number handled separately)
+    if (addr.road) parts.push(addr.road);
+    const locality = addr.village || addr.suburb || addr.neighbourhood || addr.hamlet || '';
+    if (locality && locality !== (addr.city || addr.town)) parts.push(locality);
+    const city = addr.city || addr.town || addr.county || '';
+    if (city) parts.push(city);
+    if (addr.county && addr.county !== city) parts.push(addr.county);
+    if (addr.postcode) parts.push(addr.postcode);
+    return parts.join(', ');
+  };
+
+  // Debounced search against Nominatim
+  const searchAddresses = React.useCallback((searchQuery) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 3) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const encoded = encodeURIComponent(trimmed);
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encoded}&countrycodes=gb&format=json&addressdetails=1&limit=6`,
+          { headers: { 'Accept': 'application/json' } }
+        );
+        const data = await response.json();
+        // Filter to results that have meaningful address detail
+        const filtered = data.filter(place => {
+          const addr = place.address || {};
+          return addr.postcode || addr.road || addr.city || addr.town;
+        });
+        setSuggestions(filtered);
+        setIsOpen(filtered.length > 0);
+        setHighlightedIndex(-1);
+      } catch (e) {
+        setSuggestions([]);
+        setIsOpen(false);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 400); // 400ms debounce respects Nominatim rate limits
+  }, []);
+
+  // Handle typing in the search input
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setQuery(value);
+    setSelectedAddress('');
+    onAddressSelect('');
+    searchAddresses(value);
+  };
+
+  // Handle selecting a suggestion
+  const handleSelect = (place) => {
+    const addr = place.address || {};
+    const formatted = formatAddress(place);
+    const existingNumber = addr.house_number || '';
+
+    setHouseNumber(existingNumber);
+    setBaseAddress(formatted);
+    setQuery(existingNumber ? `${existingNumber} ${formatted}` : formatted);
+    setSuggestions([]);
+    setIsOpen(false);
+    setHighlightedIndex(-1);
+    setNeedsHouseNumber(true);
+
+    if (existingNumber) {
+      setSelectedAddress(`${existingNumber} ${formatted}`);
+      onAddressSelect(`${existingNumber} ${formatted}`);
+    } else {
+      setSelectedAddress('');
+      onAddressSelect('');
+    }
+  };
+
+  // Keyboard navigation
+  const handleKeyDown = (e) => {
+    if (!isOpen || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      e.preventDefault();
+      handleSelect(suggestions[highlightedIndex]);
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Sync manual fields → parent
+  React.useEffect(() => {
+    if (manualMode) {
+      const { line1, line2, city, county, postcode } = manualFields;
+      if (line1 && city && postcode) {
+        const parts = [line1, line2, city, county, postcode].filter(Boolean);
+        onAddressSelect(parts.join(', '));
+      } else {
+        onAddressSelect('');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualFields, manualMode]);
+
+  // Clean up debounce on unmount
+  React.useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
+
+  return (
+    <div className="address-lookup-wrapper" ref={wrapperRef}>
+      <label className="address-lookup-label">Address</label>
+
+      {!manualMode ? (
+        <>
+          <div className="address-autocomplete-container">
+            <div className="address-input-row">
+              <svg className="address-search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                type="text"
+                placeholder="Start typing your address or postcode..."
+                value={query}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
+                className="address-autocomplete-input"
+                autoComplete="off"
+                role="combobox"
+                aria-expanded={isOpen}
+                aria-autocomplete="list"
+                aria-controls="address-suggestions-list"
+              />
+              {isLoading && <div className="address-spinner" />}
+              {selectedAddress && !isLoading && (
+                <svg className="address-check-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38B2AC" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              )}
+            </div>
+
+            {isOpen && suggestions.length > 0 && (
+              <ul className="address-suggestions-list" id="address-suggestions-list" role="listbox">
+                {suggestions.map((place, index) => {
+                  const formatted = formatAddress(place);
+                  return (
+                    <li
+                      key={place.place_id}
+                      role="option"
+                      aria-selected={highlightedIndex === index}
+                      className={`address-suggestion-item ${highlightedIndex === index ? 'highlighted' : ''}`}
+                      onClick={() => handleSelect(place)}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                    >
+                      <svg className="address-pin-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      <span>{formatted}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          
+          {needsHouseNumber && (
+            <div className="address-house-number-row">
+              <input
+                type="text"
+                placeholder="House/flat number or name *"
+                value={houseNumber}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setHouseNumber(val);
+                  if (val.trim() && baseAddress) {
+                    const full = `${val.trim()} ${baseAddress}`;
+                    setSelectedAddress(full);
+                    setQuery(full);
+                    onAddressSelect(full);
+                  } else {
+                    setSelectedAddress('');
+                    onAddressSelect('');
+                  }
+                }}
+                className="address-house-number-input"
+                autoFocus
+              />
+              <span className="address-house-number-hint">
+                {baseAddress}
+              </span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="address-manual-toggle"
+            onClick={() => setManualMode(true)}
+          >
+            Can't find your address? Enter it manually
+          </button>
+        </>
+      ) : (
+        <div className="address-fields">
+          <input
+            placeholder="Address line 1 (e.g. 10 Downing Street) *"
+            value={manualFields.line1}
+            onChange={e => setManualFields({ ...manualFields, line1: e.target.value })}
+            required
+          />
+          <input
+            placeholder="Address line 2 (optional)"
+            value={manualFields.line2}
+            onChange={e => setManualFields({ ...manualFields, line2: e.target.value })}
+          />
+          <div className="address-fields-row">
+            <input
+              placeholder="City / Town *"
+              value={manualFields.city}
+              onChange={e => setManualFields({ ...manualFields, city: e.target.value })}
+              required
+            />
+            <input
+              placeholder="County"
+              value={manualFields.county}
+              onChange={e => setManualFields({ ...manualFields, county: e.target.value })}
+            />
+          </div>
+          <input
+            placeholder="Postcode *"
+            value={manualFields.postcode}
+            onChange={e => setManualFields({ ...manualFields, postcode: e.target.value.toUpperCase() })}
+            className="address-postcode-manual"
+            required
+          />
+          <button
+            type="button"
+            className="address-manual-toggle"
+            onClick={() => { setManualMode(false); setManualFields({ line1: '', line2: '', city: '', county: '', postcode: '' }); }}
+          >
+            ← Back to address search
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 // Login form for existing patients
 function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -174,13 +482,29 @@ function LoginForm({ onLogin, onSwitchToRegister, onForgotPassword }) {
             onChange={e => setUsername(e.target.value)} 
             required 
           />
-          <input 
-            type="password" 
-            placeholder="Password" 
-            value={password} 
-            onChange={e => setPassword(e.target.value)} 
-            required 
-          />
+          <div className="password-wrapper">
+            <input 
+              type={showPassword ? "text" : "password"}
+              placeholder="Password" 
+              value={password} 
+              onChange={e => setPassword(e.target.value)} 
+              required 
+            />
+            <button type="button" className="password-toggle" onClick={() => setShowPassword(p => !p)}>
+              {showPassword ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
           <button type="submit">Log In</button>
         </form>
         <div style={{marginTop: '25px'}}>
@@ -199,6 +523,7 @@ function RegisterForm({ onLogin, onSwitchToLogin }) {
     username: '', password: '', full_name: '', dob: '', address: ''
   });
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -224,10 +549,28 @@ function RegisterForm({ onLogin, onSwitchToLogin }) {
         {error && <div style={{color: '#E53E3E', marginBottom: '15px', fontWeight: '500'}}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <input placeholder="Username" onChange={e => setFormData({...formData, username: e.target.value})} required />
-          <input type="password" placeholder="Password" onChange={e => setFormData({...formData, password: e.target.value})} required />
-          <input placeholder="Full Name" onChange={e => setFormData({...formData, full_name: e.target.value})} required />
-          <input type="date" placeholder="Date of Birth" onChange={e => setFormData({...formData, dob: e.target.value})} required />
-          <input placeholder="Address" onChange={e => setFormData({...formData, address: e.target.value})} required />
+          <div className="password-wrapper">
+            <input type={showPassword ? "text" : "password"} placeholder="Password" onChange={e => setFormData({...formData, password: e.target.value})} required />
+            <button type="button" className="password-toggle" onClick={() => setShowPassword(p => !p)}>
+              {showPassword ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+          <input placeholder="Full Name *" onChange={e => setFormData({...formData, full_name: e.target.value})} required />
+          <label style={{fontSize:'0.85rem', color:'var(--text-muted)', textAlign:'left', display:'block', marginBottom:'4px'}}>Date of Birth *</label>
+          <input type="date" onChange={e => setFormData({...formData, dob: e.target.value})} required />
+          <AddressLookup onAddressSelect={(addr) => setFormData({...formData, address: addr})} />
+          {!formData.address && <div style={{fontSize:'0.8rem', color:'#E53E3E', marginTop:'-8px', marginBottom:'8px'}}>Address is required</div>}
           <button type="submit">Register</button>
         </form>
         <div style={{marginTop: '25px'}}>
@@ -339,7 +682,13 @@ function ProfilePage({ token, onBack }) {
             <input value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} required />
             
             <label>Home Address</label>
-            <input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required />
+            <div style={{marginBottom: '8px', padding: '10px', background: 'var(--bg-sage-grey)', borderRadius: '8px', fontSize: '0.9rem', color: 'var(--text-dark)'}}>
+              Current: {formData.address || 'Not set'}
+            </div>
+            <AddressLookup
+              onAddressSelect={(addr) => setFormData({...formData, address: addr})}
+              initialValue={formData.address}
+            />
             
             <label>Username</label>
             <input value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
