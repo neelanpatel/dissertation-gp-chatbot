@@ -18,11 +18,35 @@ import re
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+NHS_CLIENT_ID = os.getenv("NHS_CLIENT_ID")
+NHS_CLIENT_SECRET = os.getenv("NHS_CLIENT_SECRET")
+TOKEN_URL = "https://int.api.service.nhs.uk/oauth2/token"
+
 # Add NHS API Key 
 NHS_API_KEY = os.getenv("NHS_API_KEY") 
 
 # NHS API Configuration
 API_BASE_URL = "https://int.api.service.nhs.uk/nhs-website-content"
+
+
+def get_access_token() -> Optional[str]:
+    try:
+        response = requests.post(
+            TOKEN_URL,
+            data={
+                'grant_type': 'client_credentials',
+                'client_id': NHS_CLIENT_ID,
+                'client_secret': NHS_CLIENT_SECRET
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json().get('access_token')
+    except Exception as e:
+        print(f"  ✗ Failed to get access token: {e}")
+        print(f"  Response: {e.response.text if hasattr(e, 'response') else 'No response body'}")
+        return None
 
 
 # API Fetching Functions
@@ -33,7 +57,10 @@ def get_condition_urls_from_api(limit: int = 50) -> List[str]:
     Returns a list of specific condition API endpoints.
     """
     all_urls = []
-    headers = {'apikey': NHS_API_KEY}
+    token = get_access_token()
+    if not token:
+        return []
+    headers = {'Authorization': f'Bearer {token}'}
     list_endpoint = f"{API_BASE_URL}/conditions"
     
     print(f"Connecting to NHS API: {list_endpoint}")
@@ -205,7 +232,10 @@ def fetch_all_conditions(urls: List[str], delay: float = 0.6) -> List[Dict]:
     """
     Iterates through API endpoints to download condition data while respecting rate limits.
     """
-    headers = {'apikey': NHS_API_KEY}
+    token = get_access_token()
+    if not token:
+        return []
+    headers = {'Authorization': f'Bearer {token}'}
     conditions_data = []
     
     print(f"\nStarting API ingestion for {len(urls)} conditions...")
@@ -477,8 +507,8 @@ def main(use_sample_data: bool = False, limit: int = 50):
     print("NHS API Data Ingestion Pipeline")
     print("=" * 60)
     
-    if not NHS_API_KEY and not use_sample_data:
-        print("⚠ ERROR: NHS_API_KEY not found in environment variables.")
+    if not NHS_CLIENT_ID or not NHS_CLIENT_SECRET:
+        print("⚠ ERROR: NHS_CLIENT_ID or NHS_CLIENT_SECRET not found in environment variables.")
         print("Falling back to sample data...")
         use_sample_data = True
     

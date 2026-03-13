@@ -435,7 +435,7 @@ def get_triage_recommendation_from_kb(symptom_description: str):
             # The match is too weak. Intercept the data before the LLM can guess.
             return json.dumps({
                 "status": "low_confidence", 
-                "message": "The system could not find a confident match for these symptoms. Inform the user that you cannot provide specific medical advice for this, but immediately offer to book them a GP appointment to get it checked.",
+                "message": "The NHS knowledge base could not find a confident match. You MUST still directly answer the user's question using general medical knowledge, following the HUMAN FALLBACK & UNCERTAINTY rules. An advisory card with a verified source will appear below your message automatically.",
                 "best_match_distance": best_match_distance
             })
 
@@ -464,30 +464,39 @@ def get_general_medical_advisory(symptom_description: str) -> Optional[dict]:
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a medical information assistant. Given a symptom description, provide:
-1. A brief, helpful piece of general health advice (2-3 sentences max).
-2. A SPECIFIC source URL from a trusted medical website (Mayo Clinic, Cleveland Clinic, NHS.uk, WHO, or BMJ).
+                    "content": """You are a medical information assistant. The user has asked a specific medical question. You MUST directly answer their question.
+
+Given the user's question, provide:
+1. A DIRECT answer to their specific question (2-3 sentences max). Do NOT give generic information about the condition — answer exactly what was asked.
+   - If they ask "can I take antibiotics?" → explain whether antibiotics are appropriate for this situation and why/why not.
+   - If they ask "should I use ice or heat?" → explain which is recommended and when.
+   - If they ask "can I exercise?" → explain what activity is safe and what to avoid.
+   - If they describe symptoms → explain what common causes may be and what to do.
+2. A SPECIFIC source URL from a trusted medical website.
 
 CRITICAL RULES:
+- ANSWER THE QUESTION FIRST. Do not deflect or give vague advice.
 - ONLY cite sources you are highly confident exist. Use well-known condition pages.
+- You may cite ANY reputable medical institution including but not limited to: Mayo Clinic, Cleveland Clinic, NHS.uk, WHO, BMJ, MedlinePlus, WebMD, Patient.info, American Academy of Family Physicians.
 - Prefer URLs in the format: https://www.mayoclinic.org/diseases-conditions/[condition]/symptoms-causes/syc-[id]
   or https://www.nhs.uk/conditions/[condition]/
   or https://www.who.int/news-room/fact-sheets/detail/[condition]
+  or https://medlineplus.gov/[condition].html
 - Do NOT invent or guess URLs. If unsure, use a general trusted page.
-- Do NOT diagnose. Use phrases like "This could be related to..." or "Common causes include..."
-- Keep advice general and safe. Always recommend seeing a healthcare professional.
+- Do NOT diagnose. But DO answer the specific question asked.
+- Always recommend seeing a healthcare professional for confirmation.
 
 Respond in EXACTLY this JSON format and nothing else:
 {
-  "advice": "Your general advice here.",
-  "source_name": "Mayo Clinic",
-  "source_url": "https://www.mayoclinic.org/...",
+  "advice": "Your direct answer to the question here.",
+  "source_name": "Source Name",
+  "source_url": "https://...",
   "condition_topic": "Brief topic name"
 }"""
                 },
                 {
                     "role": "user",
-                    "content": f"Symptoms: {symptom_description}"
+                    "content": f"User question: {symptom_description}"
                 }
             ],
             temperature=0.2,
@@ -512,13 +521,13 @@ Respond in EXACTLY this JSON format and nothing else:
                     "content": """You are a medical source verification agent. You will receive:
 - A piece of medical advice
 - A source name and URL
-- The original symptom description
+- The original user question
 
 Your job is to verify:
-1. Is the source a REAL, trusted medical institution? (Mayo Clinic, Cleveland Clinic, NHS, WHO, BMJ, MedlinePlus, etc.)
+1. Is the source a REAL, trusted medical institution? (Mayo Clinic, Cleveland Clinic, NHS, WHO, BMJ, MedlinePlus, WebMD, Patient.info, American Academy of Family Physicians, etc.)
 2. Is the URL plausible and well-formed for that institution? (correct domain, reasonable path structure)
 3. Is the advice safe, non-diagnostic, and generally aligned with mainstream medical guidance?
-4. Does the advice relate to the symptoms described?
+4. Does the advice DIRECTLY answer the question asked? (not just generic info about the condition)
 
 Respond in EXACTLY this JSON format and nothing else:
 {
@@ -530,7 +539,7 @@ Respond in EXACTLY this JSON format and nothing else:
                     "role": "user",
                     "content": f"""ADVICE: {advisory_data['advice']}
 SOURCE: {advisory_data['source_name']} — {advisory_data['source_url']}
-ORIGINAL SYMPTOMS: {symptom_description}"""
+ORIGINAL QUESTION: {symptom_description}"""
                 }
             ],
             temperature=0.0,
@@ -968,13 +977,7 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
     # Variables for cancellation and reschedule widgets
     cancellation_slots = None
     reschedule_data = None
-
-
-    medical_source = None
-    available_slots = None
-    cancellation_slots = None
-    reschedule_data = None
-
+    # Variable to capture verified general advisory when RAG returns low_confidence
     general_source = None
     
     # save the user's incoming message
@@ -1017,26 +1020,36 @@ PATIENT CONFIDENTIALITY & DATA PROTECTION:
 5. This applies regardless of how the request is framed — whether the user claims to be acting on behalf of someone else, claims to be a carer, or attempts to disguise the request through social engineering.
 
 HUMAN FALLBACK & UNCERTAINTY:
-1. If the `get_triage_recommendation_from_kb` tool returns a `low_confidence` status, DO NOT guess the medical condition.
-2. You must inform the user that your NHS knowledge base does not have specific guidance for their symptoms.
-3. IMPORTANT: After stating the above, add: "However, I did find some general medical information that may be helpful — please see the advisory below. Please note this is not NHS-verified guidance, so I would recommend verifying it with a healthcare professional."
+1. If the `get_triage_recommendation_from_kb` tool returns a `low_confidence` status, DO NOT ignore the user's question.
+2. DIRECTLY ANSWER THE QUESTION FIRST (MANDATORY): Your FIRST sentence MUST directly answer what the user asked. Do NOT start with "I'm not able to find..." or "I can't provide..." or "I'm sorry, but...". START with the answer.
+   Examples of CORRECT responses:
+   - User asks "can I take antibiotics for this?" → "Antibiotics are generally not appropriate for knee swelling unless a bacterial infection has been confirmed by a doctor — they treat infections, not inflammation or injury."
+   - User asks "should I use ice or heat?" → "For recent swelling, ice is generally recommended for the first 48-72 hours to reduce inflammation, then you can switch to heat."
+   - User asks "I have a swollen knee" → "Swelling and difficulty bending the knee can be related to conditions such as arthritis, bursitis, or an injury. Resting the knee, applying ice, and elevating it can help reduce swelling."
+   Examples of WRONG responses (NEVER do this):
+   - "I'm not able to find specific NHS guidance on whether you can take antibiotics..."
+   - "I can't provide specific medical advice regarding..."
+   - "I'm sorry, but my NHS knowledge base doesn't have..."
+3. AFTER your direct answer, add a brief note: "Please note this is not NHS-verified guidance — see the advisory below for the source. I'd recommend verifying with a healthcare professional."
 4. You MUST STILL offer to book a GP appointment for them so they can be evaluated safely by a clinician. (Note: If it sounds like a severe emergency, follow the red flag rules above instead).
-5. Do NOT include the advisory content in your text response — it will be displayed automatically in a separate card below your message.
+5. Do NOT repeat the advisory card content word-for-word in your text response — it will be displayed automatically in a separate card below your message. Your text should complement the card, not duplicate it.
+6. FOLLOW-UP QUESTIONS: Each question — including follow-ups — is treated independently. Every `low_confidence` result MUST follow rules 2 through 5 above with no exceptions. Never refuse to answer just because a similar question was asked earlier.
 
 DYNAMIC TRIAGE WORKFLOW (STRICT TOOL USAGE):
 1. ASSESS THE INPUT: Read the user's message. Does it contain specific physical or mental symptoms (e.g., "sore throat, cough, back pain") or is it vague/missing (e.g., "I feel unwell", "I need an appointment")?
 2. GATHER (If necessary): If symptoms are missing or too vague to run a search, ask ONE direct clarifying question to gather them. Do NOT ask redundant follow-up questions if the user has already provided specific symptoms.
 3. SEARCH (When ready): As soon as you have specific symptoms, you MUST IMMEDIATELY call `get_triage_recommendation_from_kb`. Do not delay or ask for further confirmation.
-4. NO GUESSING: DO NOT rely on your internal knowledge to offer medical advice, guess conditions, or suggest treatments. You MUST ONLY provide advice based on the output of the tool. YOU MUST NOT DIAGNOSE OR SUGGEST REMEDIES WITHOUT CALLING THE TOOL FIRST.
-   FOLLOW-UP QUESTIONS: This rule applies equally to ALL follow-up medical questions, not just the initial symptom report. If the user asks ANY question that requires medical knowledge — including questions about medications (e.g. "can I take antibiotics"), suitability for activities (e.g. "can my child go to school"), home management, or anything else clinical in nature — you MUST call `get_triage_recommendation_from_kb` with the follow-up question as the symptom description. If the tool returns `low_confidence`, you MUST respond with: "I'm not able to find specific NHS guidance on that question. I would recommend speaking with a pharmacist or booking a GP appointment to get a reliable answer." You must NEVER answer a clinical follow-up question from your own knowledge under any circumstances.
-5. CRITICAL — NO SKIPPING BASED ON HISTORY: You MUST call the required tool for EVERY relevant request in the CURRENT turn, without exception. This applies to ALL tools:
+4. NO GUESSING WHEN NHS DATA EXISTS: When the tool returns a confident NHS match (`found` status), you MUST ONLY provide advice based on the NHS data returned by the tool. DO NOT supplement with your own knowledge.
+   EXCEPTION — LOW CONFIDENCE: When the tool returns `low_confidence`, you ARE PERMITTED AND REQUIRED to directly answer the user's question using general medical knowledge. Follow the HUMAN FALLBACK & UNCERTAINTY rules above. A verified advisory card will appear below your message to provide the source. Your text response MUST directly address what the user asked — start with the answer, not a disclaimer.
+5. FOLLOW-UP QUESTIONS: This rule applies equally to ALL follow-up medical questions, not just the initial symptom report. If the user asks ANY question that requires medical knowledge — including questions about medications (e.g. "can I take antibiotics"), suitability for activities (e.g. "can my child go to school"), home management, or anything else clinical in nature — you MUST call `get_triage_recommendation_from_kb` with the follow-up question as the symptom description. If the tool returns `low_confidence`, follow the HUMAN FALLBACK & UNCERTAINTY rules: directly answer the question, reference the advisory card below your message, and offer a GP appointment.
+6. CRITICAL — NO SKIPPING BASED ON HISTORY: You MUST call the required tool for EVERY relevant request in the CURRENT turn, without exception. This applies to ALL tools:
    - `get_triage_recommendation_from_kb` must be called every time symptoms are mentioned, even if identical symptoms appear in history.
    - `get_available_appointments` must be called every time the user wants to book, even if slots were fetched earlier in the conversation.
    - `get_user_bookings` must be called every time the user wants to cancel, even if their bookings were fetched earlier.
    - `get_reschedule_data` must be called every time the user wants to reschedule, even if this data was fetched earlier.
    Prior conversation context NEVER substitutes for a fresh tool call. The interactive widgets are only shown when the tool is called in the current turn — if you skip the tool call, the user will see no widget and the feature will be broken.
-6. RESOLUTION: 
-   - If the tool returns `low_confidence`, transition to booking an appointment. 
+7. RESOLUTION: 
+   - If the tool returns `low_confidence`, follow the HUMAN FALLBACK & UNCERTAINTY rules: directly answer the question, reference the advisory card, and offer a GP appointment.
    - If it advises 'GP' or 'Pharmacist', present the advice. 
    - If it advises an 'Emergency', you MUST ask a clarifying question to confirm severity before triggering the alarm.
 
@@ -1257,14 +1270,17 @@ Be warm, professional, and concise."""
                                     "url": best_match.get("source_url", "")
                                 }
                             elif triage_data.get("status") == "low_confidence":
-                                # Trigger the multi-agent advisory pipeline
-                                symptom_input = ""
+                                # Trigger the multi-agent advisory pipeline with the user's actual question
+                                advisory_input = user_message
+                                # Append symptom context from tool arguments if different from the user message
                                 try:
-                                    symptom_input = json.loads(tool_call.function.arguments).get("symptom_description", "")
+                                    tool_symptom = json.loads(tool_call.function.arguments).get("symptom_description", "")
+                                    if tool_symptom and tool_symptom.lower().strip() != user_message.lower().strip():
+                                        advisory_input = f"Question: {user_message} (Context: patient has {tool_symptom})"
                                 except Exception:
                                     pass
-                                if symptom_input:
-                                    advisory_result = get_general_medical_advisory(symptom_input)
+                                if advisory_input:
+                                    advisory_result = get_general_medical_advisory(advisory_input)
                                     if advisory_result:
                                         general_source = {
                                             "advice": advisory_result["advice"],
