@@ -156,12 +156,12 @@ function ForgotPasswordForm({ onBack }) {
   );
 }
 
-// UK Address Lookup — postcode validation + structured entry
+// UK Address Lookup: postcode validation + structured entry
 function AddressLookup({ onAddressSelect, initialValue = '' }) {
   const [postcode, setPostcode] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const [step, setStep] = React.useState('postcode'); // postcode | details | manual
+  const [step, setStep] = React.useState('postcode'); 
   const [areaInfo, setAreaInfo] = React.useState(null);
   const [details, setDetails] = React.useState({ flatUnit: '', houseName: '', houseNumber: '', street: '' });
 
@@ -204,7 +204,6 @@ function AddressLookup({ onAddressSelect, initialValue = '' }) {
     return parts.join(', ');
   }, []);
 
-  // Sync details → parent whenever they change
   React.useEffect(() => {
     if (step === 'details' && areaInfo) {
       const d = details;
@@ -214,10 +213,8 @@ function AddressLookup({ onAddressSelect, initialValue = '' }) {
         onAddressSelect('');
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [details, step, areaInfo]);
 
-  // Sync manual fields → parent
   const [manualFields, setManualFields] = React.useState({
     flatUnit: '', houseNumber: '', houseName: '', street: '', city: '', county: '', postcode: ''
   });
@@ -233,7 +230,6 @@ function AddressLookup({ onAddressSelect, initialValue = '' }) {
         onAddressSelect('');
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualFields, step]);
 
   // Postcode entry 
@@ -265,7 +261,7 @@ function AddressLookup({ onAddressSelect, initialValue = '' }) {
     );
   }
 
-  // Postcode confirmed — enter address details
+  // Postcode confirmed, enter address details
   if (step === 'details' && areaInfo) {
     return (
       <div className="address-lookup-wrapper">
@@ -543,7 +539,6 @@ function ProfilePage({ token, onBack }) {
 
   useEffect(() => {
     fetchProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const handleUpdate = async (e) => {
@@ -879,7 +874,6 @@ function App() {
             text: msg.content,
             source: msg.source || null 
           }));
-          // Prepend the welcome message so it's always at the top
           setChatHistory([
             { 
               sender: 'agent', 
@@ -921,7 +915,6 @@ function App() {
       const interval = setInterval(() => fetchAppointments(token), 10000);
       return () => clearInterval(interval);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   useEffect(() => {
@@ -1194,7 +1187,7 @@ function App() {
                   />
                 )}
 
-                {/* NEW: Inline Medical Source Card */}
+                {/* Inline Medical Source Card */}
                 {msg.source && (
                   <div className="inline-medical-source">
                     <div className="inline-source-header">
@@ -1316,7 +1309,7 @@ function App() {
         )}
       </div>
       
-      {/* Booking confirmation popup toast */}
+      {/* Booking confirmation popup */}
       {showBookingConfirmation && (
         <div style={{
           position: 'absolute', top: '30px', right: '30px', 

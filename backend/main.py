@@ -15,13 +15,13 @@ from dotenv import load_dotenv
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 
-# Load environment configuration
+
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 DATABASE_NAME = 'gp_database.db'
 
-# Security Configuration
-SECRET_KEY = "YOUR_SUPER_SECRET_KEY_HERE"
+# Security 
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -29,7 +29,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Attempt to load the RAG knowledge base (Vector Store + JSON)
-# If this fails, the application will degrade gracefully but triage will be limited.
+# If this fails, the application will fallback but triage will be limited.
 try:
     faiss_index = faiss.read_index("nhs_index.faiss")
     with open("nhs_data.json", "r") as f:
@@ -46,13 +46,12 @@ def get_db_connection():
     return conn
 
 def initialise_database():
-    """Sets up the SQLite schema if it doesn't exist."""
+    # Sets up the SQLite schema if it doesn't exist.
     conn = get_db_connection()
     cursor = conn.cursor()
 
     
-    # Users table: Stores registered patient credentials and personal information.
-    # We use a unique constraint on username to prevent duplicate registrations.
+    # Users table, Stores registered patient credentials and personal information.
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
@@ -64,9 +63,6 @@ def initialise_database():
     )
     ''')
     
-    # Appointments table: Stores the core slot data.
-    # We use a unique constraint on slot_time to prevent double-booking at the schema level.
-    # Now includes a foreign key relationship to link slots to authenticated users.
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS appointments (
         id INTEGER PRIMARY KEY,
@@ -83,7 +79,7 @@ def initialise_database():
     )
     ''')
     
-    # Audit trail: Tracks all changes (booking, cancellation) for compliance.
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS booking_history (
         id INTEGER PRIMARY KEY,
@@ -97,7 +93,7 @@ def initialise_database():
     )
     ''')
 
-    # Messages table: Stores chat history to prevent context loss.
+    # Messages table, Stores chat history to prevent context loss.
     # Indexed by user_id implicitly via the foreign key to speed up retrieval.
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS messages (
@@ -110,14 +106,14 @@ def initialise_database():
     )
     ''')
 
-    # Safely add new columns for the profile if they don't exist yet
+    #add new columns for the profile if they don't exist yet
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN medical_notes TEXT DEFAULT 'No known allergies. Routine health checks up to date.'")
         cursor.execute("ALTER TABLE users ADD COLUMN prescriptions TEXT DEFAULT 'None active.'")
     except sqlite3.OperationalError:
         pass # Columns already exist
         
-    # NEW: Safely add the source column to messages
+    #  add the source column to messages
     try:
         cursor.execute("ALTER TABLE messages ADD COLUMN source TEXT")
     except sqlite3.OperationalError:
@@ -127,10 +123,10 @@ def initialise_database():
     conn.close()
 
 def generate_appointment_slots():
-    """
-    Populates the database with empty slots for the next 5 business days.
-    Logic: 9am-12pm and 2pm-5pm, every 20 minutes.
-    """
+
+    # Populates the database with empty slots for the next 5 business days.
+
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -156,7 +152,7 @@ def generate_appointment_slots():
                             (slot_time, 'standard')
                         )
                     except sqlite3.IntegrityError:
-                        # Slot already exists; ignore
+                        # Slot already exists, ignore
                         pass
             slots_generated += 1
             
@@ -167,20 +163,20 @@ def generate_appointment_slots():
     conn.close()
     print(f"Generated appointment slots for the next 5 business days.")
 
-# Perform initial setup on module load
+
 initialise_database()
 generate_appointment_slots()
 
 def verify_password(plain_password, hashed_password):
-    """Verifies a plaintext password against its bcrypt hash."""
+    # Verifies a plaintext password against its bcrypt hash.
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password):
-    """Generates a secure bcrypt hash for a new password."""
+     # Generates a secure bcrypt hash for a new password.
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Creates a signed JWT token for stateless API authentication."""
+     #Creates a signed JWT token for stateless API authentication.
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -190,10 +186,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    """
-    Dependency function to extract and validate the current user from the JWT.
-    Returns the user database record as a dictionary if successful.
-    """
+
+    # Dependency function to extract and validate the current user from the JWT.
+    # Returns the user database record as a dictionary if successful.
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -216,10 +212,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     return dict(user)
 
 def get_available_appointments():
-    """
-    Retrieves and formats available slots for the LLM.
-    Returns a grouped natural language string to help the model present data clearly.
-    """
+
+    # Retrieves and formats available slots for the LLM.
+
     conn = get_db_connection()
     # Fetch only future, unbooked slots. Limit to 60 to prevent token overflow.
     appointments = conn.execute("""
@@ -262,10 +257,9 @@ def get_available_appointments():
     })
 
 def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day: str, requested_time: str, notes: str = None):
-    """
-    Attempts to match a fuzzy natural language date request to a specific database slot.
-    Booking logic securely links the confirmed slot to the authenticated user ID.
-    """
+
+    # Booking logic securely links the confirmed slot to the authenticated user ID.
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -297,7 +291,6 @@ def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day:
             time_match = requested_time_clean in slot_time_12hr
             
             if day_match and time_match:
-                # Generate a pseudo-random booking reference
                 booking_ref = f"GP{slot['id']:04d}{datetime.now().strftime('%H%M')}"
                 booked_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
@@ -335,10 +328,10 @@ def book_appointment_by_datetime(user_id: int, patient_name: str, requested_day:
         return json.dumps({"status": "error", "message": f"Booking error: {str(e)}"})
 
 def cancel_appointment(user_id: int, requested_day: str, requested_time: str):
-    """
-    Cancels an existing appointment using natural language date and time.
-    Ensures that users can only cancel appointments tied to their specific user account.
-    """
+
+
+   # Ensures that users can only cancel appointments tied to their specific user account.
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -359,8 +352,7 @@ def cancel_appointment(user_id: int, requested_day: str, requested_time: str):
         # Normalise input for comparison
         requested_time_clean = requested_time.strip().upper()
         appointment_to_cancel = None
-        
-        # Fuzzy match the requested date/time against their bookings
+
         for appt in user_appointments:
             slot_datetime = datetime.strptime(appt['slot_time'], '%Y-%m-%d %H:%M:%S')
             slot_day = slot_datetime.strftime('%A')
@@ -423,7 +415,7 @@ def get_triage_recommendation_from_kb(symptom_description: str):
 
         distances, indices = faiss_index.search(query_vector, 3)
 
-        # Extract the distance of the absolute best (closest) match.
+        # Extract the distance of the absolute best match.
         best_match_distance = float(distances[0][0])
 
         print(f"\n---> FAISS DISTANCE SCORE: {best_match_distance} <---", flush=True)
@@ -455,10 +447,10 @@ def get_general_medical_advisory(symptom_description: str) -> Optional[dict]:
     Agent 2 (Verifier): Cross-checks the advice and source for legitimacy,
                         rejecting hallucinated or unreliable sources.
     
-    Returns a dict with advice, source_name, source_url, and condition — or None if rejected.
+    Returns a dict with advice, source_name, source_url, and condition or None if rejected.
     """
     try:
-        # ── AGENT 1: Advisory Agent ──
+        # Agent 1: Advisory Agent
         advisory_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -512,7 +504,7 @@ Respond in EXACTLY this JSON format and nothing else:
             print("Advisory agent returned incomplete data.")
             return None
 
-        # ── AGENT 2: Verification Agent ──
+        # Agent 2: Verification Agent 
         verification_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -593,7 +585,7 @@ def get_user_bookings(user_id: int):
 
 
 def get_reschedule_data(user_id: int):
-    """Returns current bookings + available slots in one payload for the reschedule widget."""
+    # Returns current bookings + available slots in one payload for the reschedule widget.
     bookings_response = json.loads(get_user_bookings(user_id))
     slots_response = json.loads(get_available_appointments())
 
@@ -637,7 +629,7 @@ class ChatRequest(BaseModel):
 
 @app.post("/register", response_model=Token)
 async def register(user: UserCreate):
-    """Endpoint for new patients to create an account in the system."""
+    # Endpoint for new patients to create an account in the system.
     conn = get_db_connection()
     try:
         hashed_password = get_password_hash(user.password)
@@ -656,7 +648,7 @@ async def register(user: UserCreate):
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Endpoint to exchange valid user credentials for a JWT access token."""
+    # Endpoint to exchange valid user credentials for a JWT access token.
     conn = get_db_connection()
     user = conn.execute("SELECT * FROM users WHERE username = ?", (form_data.username,)).fetchone()
     conn.close()
@@ -676,7 +668,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 @app.get("/users/me")
 async def read_users_me(current_user: dict = Depends(get_current_user)):
-    """Returns profile data for the currently authenticated user."""
+    # Returns profile data for the currently authenticated user.
     return {
         "username": current_user['username'], 
         "full_name": current_user['full_name'],
@@ -694,7 +686,7 @@ class UserUpdate(BaseModel):
 
 @app.put("/users/me")
 async def update_user_profile(update_data: UserUpdate, current_user: dict = Depends(get_current_user)):
-    """Endpoint for patients to update their personal details."""
+    # Endpoint for patients to update their personal details.
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -731,10 +723,9 @@ async def update_user_profile(update_data: UserUpdate, current_user: dict = Depe
 
 @app.get("/chat/history")
 async def fetch_history(current_user: dict = Depends(get_current_user)):
-    """Retrieves the last 50 messages for the authenticated user to restore chat context."""
+    # Retrieves the last 50 messages for the authenticated user to restore chat context.
     conn = get_db_connection()
     
-    # Added 'source' to the SELECT statements
     messages = conn.execute("""
         SELECT role, content, timestamp, source 
         FROM (
@@ -761,7 +752,7 @@ async def fetch_history(current_user: dict = Depends(get_current_user)):
 
 @app.get("/appointments")
 async def list_appointments(current_user: dict = Depends(get_current_user)):
-    """Endpoint for the user dashboard. Returns ONLY the logged-in user's appointments."""
+    # Endpoint for the user dashboard. Returns only the logged-in user's appointments.
     conn = get_db_connection()
     appointments = conn.execute("""
         SELECT id, slot_time, booking_reference, appointment_type, status, patient_name, notes
@@ -774,7 +765,7 @@ async def list_appointments(current_user: dict = Depends(get_current_user)):
 
 @app.post("/appointments/refresh")
 async def refresh_appointments():
-    """Admin/Dev endpoint to reset the appointment database."""
+    # Admin/Dev endpoint to reset the appointment database.
     try:
         generate_appointment_slots()
         return {"status": "success", "message": "Appointment slots have been refreshed for the next 5 business days."}
@@ -835,7 +826,7 @@ class RescheduleRequest(BaseModel):
 
 @app.post("/appointments/reschedule")
 async def reschedule_appointment(request: RescheduleRequest, current_user: dict = Depends(get_current_user)):
-    """Atomically cancels an existing appointment and books a new one in a single transaction."""
+    # cancels an existing appointment and books a new one in a single transaction.
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -990,8 +981,7 @@ async def handle_chat(request: ChatRequest, current_user: dict = Depends(get_cur
     conn.commit()
 
     
-    # System prompt defines the persona, STRICT safety guardrails, and injects authenticated user context.
-    # Note: Moving this to a config file would be a future improvement.
+    
     system_prompt = {
         "role": "system",
         "content": f"""You are a helpful GP surgery assistant.
@@ -1073,8 +1063,7 @@ Be warm, professional, and concise."""
     }
     
     messages = [system_prompt] + history + [{"role": "user", "content": user_message}]
-    
-    # Wrapper functions to securely inject the authenticated user_id without relying on the LLM
+
     def book_appt_wrapper(requested_day, requested_time, patient_name=None, notes=None):
         return book_appointment_by_datetime(current_user['id'], current_user['full_name'], requested_day, requested_time, notes)
         
@@ -1087,7 +1076,7 @@ Be warm, professional, and concise."""
     def get_reschedule_data_wrapper():
         return get_reschedule_data(current_user['id'])
 
-    # Define available tools (Functions) for the OpenAI model
+    # Define available tools for the OpenAI model
     tools = [
         {
             "type": "function",

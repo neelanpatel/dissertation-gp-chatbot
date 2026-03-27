@@ -528,7 +528,7 @@ body {
   align-items: flex-end;
 }
 
-/* Make sure the bubble takes up full width of the wrapper, but wrapper is constrained */
+
 .message-bubble {
   width: fit-content;
   max-width: 100%;
@@ -600,18 +600,18 @@ body {
   text-decoration: underline;
 }
 
-/* --- Profile Page & Navigation Styles --- */
+/* Profile Page & Navigation Styles */
 
 .top-nav-bar {
   display: flex;
   justify-content: flex-end;
   padding: 20px 30px 0 30px;
-  position: absolute; /* Floats over the chat */
+  position: absolute; 
   top: 0;
   right: 0;
   width: 100%;
   box-sizing: border-box;
-  z-index: 999; /* Boosted z-index to ensure it sits on top */
+  z-index: 999; 
   pointer-events: none;
 }
 
@@ -1088,7 +1088,7 @@ body {
 }
 
 
-/* ── Address Lookup ── */
+/* Address Lookup */
 .address-lookup-wrapper {
   width: 100%;
   margin-bottom: 16px;
@@ -1103,7 +1103,7 @@ body {
   margin-bottom: 8px;
 }
 
-/* Step 1: Postcode row */
+
 .address-postcode-row {
   display: flex;
   gap: 10px;
@@ -1170,7 +1170,7 @@ body {
   font-weight: 500;
 }
 
-/* Step 2: Confirmed postcode bar */
+
 .address-postcode-confirmed {
   display: flex;
   align-items: center;
@@ -1292,7 +1292,7 @@ body {
   text-decoration: underline;
 }
 
-/* ── General Advisory Source Card (non-NHS) ── */
+/* General Advisory Source Card (non-NHS) */
 .inline-general-source {
   margin-top: 10px;
   border: 1.5px solid #E8A317;
